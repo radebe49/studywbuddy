@@ -1,32 +1,30 @@
-# General
+# Node
+node_modules/
+.next/
+dist/
+build/
 .DS_Store
-.env
-.env.local
-.env.*.local
 
-# Python / Backend
+# Python
+backend/venv/
+venv/
 __pycache__/
 *.py[cod]
 *$py.class
-venv/
-.venv/
-env/
-backend/venv/
+backend/__pycache__/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+backend/backend_logs.txt
+logs/
 *.log
 
-# Node / Frontend
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Next.js
-.next/
-out/
-build/
-dist/
-
-# IDEs
+# Other
 .vscode/
-.idea/
+sample_exam.pdf
