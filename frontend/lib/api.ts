@@ -38,3 +38,46 @@ export const generateStudyPlan = async (solutions: ExamSolution[]): Promise<Stud
     const res = await api.post('/generate-plan', { exam_solutions: solutions });
     return res.data;
 }
+
+// --- Progress Tracking API ---
+
+export interface PracticeSessionPayload {
+    exam_id: string;
+    exam_name: string;
+    total_questions: number;
+    correct_count: number;
+    incorrect_count: number;
+    score_percentage: number;
+}
+
+export interface ProgressData {
+    sessions: PracticeSessionFromAPI[];
+    questionsMastered: number;
+    questionsAttempted: number;
+}
+
+export interface PracticeSessionFromAPI {
+    id: string;
+    exam_id: string;
+    exam_name: string;
+    session_date: string;
+    total_questions: number;
+    correct_count: number;
+    incorrect_count: number;
+    score_percentage: number;
+}
+
+export const savePracticeSession = async (session: PracticeSessionPayload): Promise<{ session_id: string }> => {
+    const res = await api.post('/progress/sessions', session);
+    return res.data;
+};
+
+export const getProgress = async (): Promise<ProgressData> => {
+    const res = await api.get('/progress');
+    return res.data;
+};
+
+export const getExamProgress = async (examId: string): Promise<PracticeSessionFromAPI[]> => {
+    const res = await api.get(`/progress/exam/${examId}`);
+    return res.data;
+};

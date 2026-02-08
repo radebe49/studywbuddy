@@ -5,6 +5,7 @@ import {
     Download, Printer, RefreshCw, XCircle, ChevronRight, Trophy, AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { savePracticeSession as saveToAPI, getProgress as fetchProgressFromAPI, ProgressData, PracticeSessionFromAPI } from '../lib/api';
 
 interface ExamViewerProps {
     paper: ExamPaper;
@@ -14,7 +15,7 @@ interface ExamViewerProps {
 type Mode = 'review' | 'practice';
 type QuestionStatus = 'unanswered' | 'correct' | 'incorrect';
 
-// --- Progress Tracking Types ---
+// --- Re-export types for Dashboard compatibility ---
 export interface PracticeSession {
     examId: string;
     examName: string;
@@ -25,35 +26,14 @@ export interface PracticeSession {
     scorePercentage: number;
 }
 
-export interface ProgressData {
-    sessions: PracticeSession[];
-    questionsMastered: number; // Total correct across all sessions
-    questionsAttempted: number; // Total attempted
-}
-
-// --- LocalStorage Keys ---
-const PROGRESS_STORAGE_KEY = 'exampilot_progress';
-
-// --- Helper Functions for Progress ---
-export const loadProgress = (): ProgressData => {
-    if (typeof window === 'undefined') return { sessions: [], questionsMastered: 0, questionsAttempted: 0 };
+// --- Helper function to load progress from Supabase API ---
+export const loadProgress = async (): Promise<ProgressData> => {
     try {
-        const stored = localStorage.getItem(PROGRESS_STORAGE_KEY);
-        if (stored) {
-            return JSON.parse(stored);
-        }
+        const data = await fetchProgressFromAPI();
+        return data;
     } catch (e) {
-        console.error('Failed to load progress:', e);
-    }
-    return { sessions: [], questionsMastered: 0, questionsAttempted: 0 };
-};
-
-export const saveProgress = (data: ProgressData) => {
-    if (typeof window === 'undefined') return;
-    try {
-        localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {
-        console.error('Failed to save progress:', e);
+        console.error('Failed to load progress from API:', e);
+        return { sessions: [], questionsMastered: 0, questionsAttempted: 0 };
     }
 };
 
@@ -102,23 +82,21 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
         }
     };
 
-    // --- Save Practice Session to Progress ---
-    const savePracticeSession = () => {
-        const session: PracticeSession = {
-            examId: paper.id,
-            examName: paper.name,
-            date: new Date().toISOString(),
-            totalQuestions,
-            correctCount,
-            incorrectCount,
-            scorePercentage
-        };
-
-        const progress = loadProgress();
-        progress.sessions.push(session);
-        progress.questionsMastered += correctCount;
-        progress.questionsAttempted += totalQuestions;
-        saveProgress(progress);
+    // --- Save Practice Session to Supabase ---
+    const savePracticeSession = async () => {
+        try {
+            await saveToAPI({
+                exam_id: paper.id,
+                exam_name: paper.name,
+                total_questions: totalQuestions,
+                correct_count: correctCount,
+                incorrect_count: incorrectCount,
+                score_percentage: scorePercentage
+            });
+            console.log('Practice session saved to Supabase');
+        } catch (e) {
+            console.error('Failed to save practice session:', e);
+        }
     };
 
     const nextQuestion = () => {

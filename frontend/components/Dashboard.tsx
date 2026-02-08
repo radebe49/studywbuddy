@@ -1,7 +1,8 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { ExamPaper, StudyPlan } from '../types';
 import FileUpload from './FileUpload';
-import { loadProgress, ProgressData } from './ExamViewer';
+import { loadProgress } from './ExamViewer';
+import { ProgressData } from '../lib/api';
 import {
     Brain,
     TrendingUp,
@@ -39,7 +40,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     const [progress, setProgress] = useState<ProgressData>({ sessions: [], questionsMastered: 0, questionsAttempted: 0 });
 
     useEffect(() => {
-        setProgress(loadProgress());
+        const fetchProgress = async () => {
+            const data = await loadProgress();
+            setProgress(data);
+        };
+        fetchProgress();
     }, []);
 
     // --- Computed Metrics ---
@@ -75,14 +80,14 @@ const Dashboard: React.FC<DashboardProps> = ({
         if (progress.sessions.length > 0) {
             const today = new Date().toDateString();
             const yesterday = new Date(Date.now() - 86400000).toDateString();
-            const lastSessionDate = new Date(progress.sessions[progress.sessions.length - 1].date).toDateString();
+            const lastSessionDate = new Date(progress.sessions[progress.sessions.length - 1].session_date).toDateString();
 
             if (lastSessionDate === today || lastSessionDate === yesterday) {
                 streak = 1;
                 // Count backwards for streak
                 for (let i = progress.sessions.length - 2; i >= 0; i--) {
-                    const sessionDate = new Date(progress.sessions[i].date).toDateString();
-                    const prevSession = new Date(progress.sessions[i + 1].date);
+                    const sessionDate = new Date(progress.sessions[i].session_date).toDateString();
+                    const prevSession = new Date(progress.sessions[i + 1].session_date);
                     const dayBefore = new Date(prevSession.getTime() - 86400000).toDateString();
                     if (sessionDate === dayBefore) {
                         streak++;
@@ -260,9 +265,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className="mt-4 space-y-1">
                             {progressMetrics.recentSessions.slice(0, 2).map((session, i) => (
                                 <div key={i} className="flex justify-between text-xs text-gray-500">
-                                    <span className="truncate max-w-[100px]">{session.examName.slice(0, 15)}...</span>
-                                    <span className={session.scorePercentage >= 70 ? 'text-green-600 font-medium' : 'text-gray-600'}>
-                                        {session.scorePercentage}%
+                                    <span className="truncate max-w-[100px]">{session.exam_name.slice(0, 15)}...</span>
+                                    <span className={session.score_percentage >= 70 ? 'text-green-600 font-medium' : 'text-gray-600'}>
+                                        {session.score_percentage}%
                                     </span>
                                 </div>
                             ))}

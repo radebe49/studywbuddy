@@ -361,5 +361,66 @@ async def generate_plan(request: GeneratePlanRequest):
         print(f"Error generating plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Practice Progress Endpoints ---
+
+class PracticeSessionCreate(BaseModel):
+    exam_id: str
+    exam_name: str
+    total_questions: int
+    correct_count: int
+    incorrect_count: int
+    score_percentage: int
+
+@app.post("/progress/sessions")
+async def save_practice_session(session: PracticeSessionCreate):
+    """Save a practice session result to the database."""
+    try:
+        session_data = {
+            "exam_id": session.exam_id,
+            "exam_name": session.exam_name,
+            "total_questions": session.total_questions,
+            "correct_count": session.correct_count,
+            "incorrect_count": session.incorrect_count,
+            "score_percentage": session.score_percentage
+        }
+        res = supabase.table("practice_sessions").insert(session_data).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to save session")
+        return {"message": "Session saved", "session_id": res.data[0]['id']}
+    except Exception as e:
+        print(f"Error saving practice session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/progress")
+def get_progress():
+    """Get overall progress data including all sessions and aggregate stats."""
+    try:
+        # Fetch all practice sessions, ordered by date
+        res = supabase.table("practice_sessions").select("*").order("session_date", desc=True).execute()
+        sessions = res.data or []
+        
+        # Calculate aggregate stats
+        questions_mastered = sum(s.get('correct_count', 0) for s in sessions)
+        questions_attempted = sum(s.get('total_questions', 0) for s in sessions)
+        
+        return {
+            "sessions": sessions,
+            "questionsMastered": questions_mastered,
+            "questionsAttempted": questions_attempted
+        }
+    except Exception as e:
+        print(f"Error fetching progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/progress/exam/{exam_id}")
+def get_exam_progress(exam_id: str):
+    """Get progress data for a specific exam."""
+    try:
+        res = supabase.table("practice_sessions").select("*").eq("exam_id", exam_id).order("session_date", desc=True).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"Error fetching exam progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
