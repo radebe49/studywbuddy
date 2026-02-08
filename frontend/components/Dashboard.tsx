@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { ExamPaper, StudyPlan } from '../types';
 import FileUpload from './FileUpload';
+import { loadProgress, ProgressData } from './ExamViewer';
 import {
     Brain,
     TrendingUp,
@@ -11,7 +12,10 @@ import {
     FileText,
     Zap,
     CheckCircle2,
-    Plus
+    Plus,
+    Trophy,
+    BarChart3,
+    Flame
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -31,6 +35,13 @@ const Dashboard: React.FC<DashboardProps> = ({
     onGeneratePlan,
     onNavigateToPlan
 }) => {
+    // --- Progress Tracking State ---
+    const [progress, setProgress] = useState<ProgressData>({ sessions: [], questionsMastered: 0, questionsAttempted: 0 });
+
+    useEffect(() => {
+        setProgress(loadProgress());
+    }, []);
+
     // --- Computed Metrics ---
     const stats = useMemo(() => {
         const solved = papers.filter(p => p.status === 'completed');
@@ -50,6 +61,40 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         return { totalPapers, solvedCount: solved.length, papersThisWeek, uniqueTopics: topics.size, hardCount };
     }, [papers]);
+
+    // --- Progress Metrics ---
+    const progressMetrics = useMemo(() => {
+        const masteryRate = progress.questionsAttempted > 0
+            ? Math.round((progress.questionsMastered / progress.questionsAttempted) * 100)
+            : 0;
+        const totalSessions = progress.sessions.length;
+        const recentSessions = progress.sessions.slice(-5).reverse(); // Last 5 sessions
+
+        // Streak logic (consecutive days with practice)
+        let streak = 0;
+        if (progress.sessions.length > 0) {
+            const today = new Date().toDateString();
+            const yesterday = new Date(Date.now() - 86400000).toDateString();
+            const lastSessionDate = new Date(progress.sessions[progress.sessions.length - 1].date).toDateString();
+
+            if (lastSessionDate === today || lastSessionDate === yesterday) {
+                streak = 1;
+                // Count backwards for streak
+                for (let i = progress.sessions.length - 2; i >= 0; i--) {
+                    const sessionDate = new Date(progress.sessions[i].date).toDateString();
+                    const prevSession = new Date(progress.sessions[i + 1].date);
+                    const dayBefore = new Date(prevSession.getTime() - 86400000).toDateString();
+                    if (sessionDate === dayBefore) {
+                        streak++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return { masteryRate, totalSessions, recentSessions, streak };
+    }, [progress]);
 
     // Determine current active task from plan (or first day)
     const todaysTasks = studyPlan?.schedule[0];
@@ -151,6 +196,78 @@ const Dashboard: React.FC<DashboardProps> = ({
                     >
                         Add more <ArrowUpRight size={12} />
                     </button>
+                </div>
+            </div>
+
+            {/* Progress Tracking Section */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+                {/* Mastery Rate */}
+                <div className="col-span-1 md:col-span-2 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                        <Trophy size={100} />
+                    </div>
+                    <div className="relative z-10">
+                        <p className="text-emerald-200 font-medium text-sm mb-1">Practice Mastery</p>
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-4xl font-bold">{progressMetrics.masteryRate}%</h3>
+                            <span className="text-emerald-200 text-sm">accuracy rate</span>
+                        </div>
+                        <div className="mt-4 flex items-center gap-4 text-sm">
+                            <div className="bg-white/10 px-3 py-1 rounded-full flex items-center gap-1">
+                                <CheckCircle2 size={14} />
+                                <span>{progress.questionsMastered} mastered</span>
+                            </div>
+                            <div className="bg-white/10 px-3 py-1 rounded-full flex items-center gap-1">
+                                <BarChart3 size={14} />
+                                <span>{progress.questionsAttempted} attempted</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Practice Streak */}
+                <div className="col-span-1 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between hover:border-orange-100 transition-colors">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 text-gray-500">
+                            <Flame size={18} className={progressMetrics.streak > 0 ? 'text-orange-500' : ''} />
+                            <span className="text-sm font-medium">Study Streak</span>
+                        </div>
+                        <div className="text-2xl font-bold text-gray-800">{progressMetrics.streak}</div>
+                        <div className="text-xs text-gray-400">{progressMetrics.streak === 1 ? 'day' : 'days'} in a row</div>
+                    </div>
+                    <div className="flex gap-1 mt-4">
+                        {[...Array(7)].map((_, i) => (
+                            <div
+                                key={i}
+                                className={`flex-1 h-2 rounded-full ${i < progressMetrics.streak ? 'bg-orange-400' : 'bg-gray-100'
+                                    }`}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Practice Sessions */}
+                <div className="col-span-1 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition-colors">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 text-gray-500">
+                            <Brain size={18} />
+                            <span className="text-sm font-medium">Sessions</span>
+                        </div>
+                        <div className="text-2xl font-bold text-gray-800">{progressMetrics.totalSessions}</div>
+                        <div className="text-xs text-gray-400">Practice tests completed</div>
+                    </div>
+                    {progressMetrics.recentSessions.length > 0 && (
+                        <div className="mt-4 space-y-1">
+                            {progressMetrics.recentSessions.slice(0, 2).map((session, i) => (
+                                <div key={i} className="flex justify-between text-xs text-gray-500">
+                                    <span className="truncate max-w-[100px]">{session.examName.slice(0, 15)}...</span>
+                                    <span className={session.scorePercentage >= 70 ? 'text-green-600 font-medium' : 'text-gray-600'}>
+                                        {session.scorePercentage}%
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

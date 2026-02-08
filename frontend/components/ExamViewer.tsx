@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ExamPaper, QuestionAnalysis } from '../types';
 import {
     BookOpen, CheckCircle, BrainCircuit, BarChart3, Clock, ChevronLeft,
@@ -14,6 +14,49 @@ interface ExamViewerProps {
 type Mode = 'review' | 'practice';
 type QuestionStatus = 'unanswered' | 'correct' | 'incorrect';
 
+// --- Progress Tracking Types ---
+export interface PracticeSession {
+    examId: string;
+    examName: string;
+    date: string;
+    totalQuestions: number;
+    correctCount: number;
+    incorrectCount: number;
+    scorePercentage: number;
+}
+
+export interface ProgressData {
+    sessions: PracticeSession[];
+    questionsMastered: number; // Total correct across all sessions
+    questionsAttempted: number; // Total attempted
+}
+
+// --- LocalStorage Keys ---
+const PROGRESS_STORAGE_KEY = 'exampilot_progress';
+
+// --- Helper Functions for Progress ---
+export const loadProgress = (): ProgressData => {
+    if (typeof window === 'undefined') return { sessions: [], questionsMastered: 0, questionsAttempted: 0 };
+    try {
+        const stored = localStorage.getItem(PROGRESS_STORAGE_KEY);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error('Failed to load progress:', e);
+    }
+    return { sessions: [], questionsMastered: 0, questionsAttempted: 0 };
+};
+
+export const saveProgress = (data: ProgressData) => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error('Failed to save progress:', e);
+    }
+};
+
 const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
     const [mode, setMode] = useState<Mode>('review');
     const [practiceStats, setPracticeStats] = useState<Record<number, QuestionStatus>>({});
@@ -28,6 +71,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
     // --- Computed Stats ---
     const answeredCount = Object.keys(practiceStats).length;
     const correctCount = Object.values(practiceStats).filter(s => s === 'correct').length;
+    const incorrectCount = Object.values(practiceStats).filter(s => s === 'incorrect').length;
     const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
 
     // --- Handlers ---
@@ -58,13 +102,34 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
         }
     };
 
+    // --- Save Practice Session to Progress ---
+    const savePracticeSession = () => {
+        const session: PracticeSession = {
+            examId: paper.id,
+            examName: paper.name,
+            date: new Date().toISOString(),
+            totalQuestions,
+            correctCount,
+            incorrectCount,
+            scorePercentage
+        };
+
+        const progress = loadProgress();
+        progress.sessions.push(session);
+        progress.questionsMastered += correctCount;
+        progress.questionsAttempted += totalQuestions;
+        saveProgress(progress);
+    };
+
     const nextQuestion = () => {
         if (currentQuestionIndex < totalQuestions - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
             setShowPracticeResult(false);
         } else {
-            // Finish
-            setMode('review'); // Or show a summary screen
+            // Finish and Save Progress
+            savePracticeSession();
+            setMode('review');
+
             // Trigger big confetti for completion
             confetti({
                 particleCount: 150,
