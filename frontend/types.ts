@@ -9,6 +9,7 @@ export interface ExamPaper {
     status: 'uploading' | 'processing' | 'completed' | 'failed';
     solution?: ExamSolution;
     uploadDate: Date; // or string from DB
+    error_message?: string;
 }
 
 export interface ExamSolution {

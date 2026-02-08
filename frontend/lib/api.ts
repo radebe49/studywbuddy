@@ -26,6 +26,7 @@ export const getExams = async (): Promise<ExamPaper[]> => {
         status: item.status,
         uploadDate: new Date(item.created_at || item.upload_date || new Date()), // Supabase timestamp
         solution: undefined,
+        error_message: item.error_message,
     }));
 };
 

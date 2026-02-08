@@ -49,17 +49,14 @@ class GeneratePlanRequest(BaseModel):
 
 # --- PDF Extraction ---
 def extract_text_from_pdf(file_path: str) -> str:
-    try:
-        reader = PdfReader(file_path)
-        text = ""
-        for page in reader.pages:
-            result = page.extract_text()
-            if result:
-                text += result + "\n"
-        return text
-    except Exception as e:
-        print(f"Error extracting PDF text: {e}")
-        return ""
+    # No try-except here; let exceptions bubble up to be caught by the background task
+    reader = PdfReader(file_path)
+    text = ""
+    for page in reader.pages:
+        result = page.extract_text()
+        if result:
+            text += result + "\n"
+    return text
 
 # --- NLP PIPELINE: Regex-Based Question Extraction ---
 
@@ -328,8 +325,19 @@ def process_exam_background(exam_id: str, file_path: str):
         print(f"Exam {exam_id} processed successfully.")
 
     except Exception as e:
-        print(f"Error processing exam {exam_id}: {e}")
-        supabase.table("exams").update({"status": "failed"}).eq("id", exam_id).execute()
+        error_msg = str(e)
+        print(f"Error processing exam {exam_id}: {error_msg}")
+        
+        # Check for specific Google AI errors
+        if "429" in error_msg:
+            error_msg = "AI Usage Limit Exceeded (Quota). Please try again later."
+        elif "500" in error_msg and "Google" in error_msg:
+            error_msg = "AI Service Error. Please retry."
+            
+        supabase.table("exams").update({
+            "status": "failed",
+            "error_message": error_msg[:1000]  # Truncate to avoid DB errors
+        }).eq("id", exam_id).execute()
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)

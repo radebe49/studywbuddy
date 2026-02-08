@@ -16,7 +16,8 @@ import {
     Plus,
     Trophy,
     BarChart3,
-    Flame
+    Flame,
+    AlertCircle
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -369,17 +370,25 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         className="py-3 flex items-center justify-between group cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paper.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paper.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
+                                                paper.status === 'failed' ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-500'
                                                 }`}>
-                                                {paper.status === 'completed' ? <CheckCircle2 size={16} /> : <FileText size={16} />}
+                                                {paper.status === 'completed' ? <CheckCircle2 size={16} /> :
+                                                    paper.status === 'failed' ? <AlertCircle size={16} /> : <FileText size={16} />}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
+                                                <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors truncate max-w-[180px]">
                                                     {paper.name}
                                                 </p>
-                                                <p className="text-xs text-gray-500">
-                                                    {paper.status === 'completed' ? paper.solution?.subject : 'Processing...'}
-                                                </p>
+                                                {paper.status === 'failed' ? (
+                                                    <p className="text-xs text-red-500 font-medium truncate max-w-[180px]" title={paper.error_message}>
+                                                        {paper.error_message || 'Analysis Failed'}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-xs text-gray-500">
+                                                        {paper.status === 'completed' ? paper.solution?.subject : 'Processing...'}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                         <ArrowUpRight size={16} className="text-gray-300 group-hover:text-indigo-500" />
