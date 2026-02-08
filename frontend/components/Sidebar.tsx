@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ExamPaper, ViewState } from '../types';
-import { FileText, Loader2, CheckCircle, AlertCircle, Plus, LayoutDashboard, Calendar, X } from 'lucide-react';
+import { FileText, Loader2, CheckCircle, AlertCircle, Plus, LayoutDashboard, Calendar, X, Search } from 'lucide-react';
 
 interface SidebarProps {
     papers: ExamPaper[];
@@ -23,6 +23,20 @@ const Sidebar: React.FC<SidebarProps> = ({
     isOpen,
     onClose
 }) => {
+
+    // --- State for Search ---
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // --- Filtering Logic ---
+    const filteredPapers = papers.filter(paper => {
+        if (!searchTerm) return true;
+        const lowerTerm = searchTerm.toLowerCase();
+        return (
+            paper.name.toLowerCase().includes(lowerTerm) ||
+            paper.solution?.subject?.toLowerCase().includes(lowerTerm) ||
+            paper.solution?.difficulty?.toLowerCase().includes(lowerTerm)
+        );
+    });
 
     // Helper to determine active state style
     const getNavItemClass = (isActive: boolean) =>
@@ -63,6 +77,20 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                 </div>
 
+                {/* Search Bar */}
+                <div className="px-4 pt-4 pb-2">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search papers, subjects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-gray-400"
+                        />
+                    </div>
+                </div>
+
                 <div className="p-4 space-y-2">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Menu</div>
 
@@ -91,15 +119,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 custom-scrollbar">
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2 mt-6">Recent Papers</div>
+                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2 mt-6">
+                        {searchTerm ? 'Search Results' : 'Recent Papers'}
+                    </div>
 
-                    {papers.length === 0 && (
+                    {filteredPapers.length === 0 && (
                         <div className="text-center py-8 px-4 text-gray-400 text-sm italic">
-                            No papers yet.
+                            {searchTerm ? 'No matches found.' : 'No papers yet.'}
                         </div>
                     )}
 
-                    {papers.map(paper => (
+                    {filteredPapers.map(paper => (
                         <button
                             key={paper.id}
                             onClick={() => onSelectPaper(paper)}
