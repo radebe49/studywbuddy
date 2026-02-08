@@ -30,7 +30,7 @@ genai.configure(api_key=GOOGLE_API_KEY)
 
 SELECTED_MODEL = "gemini-3-flash-preview"
 
-app = FastAPI(title="DadTutor API")
+app = FastAPI(title="StudyWBuddy API")
 
 # CORS
 app.add_middleware(
@@ -40,6 +40,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def read_root():
+    return {"status": "online", "message": "StudyWBuddy API is running"}
 
 # --- Models ---
 
