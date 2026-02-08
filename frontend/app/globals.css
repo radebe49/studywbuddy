@@ -1,83 +1,165 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4F46E5;
-  --color-secondary: #EC4899;
-  --color-surface: #F3F4F6;
-  --color-surface-dark: #1F2937;
-  --font-sans: 'Inter', sans-serif;
-  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    --color-primary: #4F46E5;
+    --color-secondary: #EC4899;
+    --color-surface: #F3F4F6;
+    --color-surface-dark: #1F2937;
+    --font-sans: 'Inter', sans-serif;
+    --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: #f9fafb;
-  color: #1f2937;
+    font-family: var(--font-sans);
+    background-color: #f9fafb;
+    color: #1f2937;
 }
 
 /* Custom Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+    width: 6px;
+    height: 6px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #E2E8F0;
-  border-radius: 3px;
+    background: #E2E8F0;
+    border-radius: 3px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #CBD5E1;
+    background: #CBD5E1;
 }
 
 /* Print Styles */
 @media print {
-  @page { margin: 1cm; size: A4; }
-  .no-print { display: none !important; }
-  
-  body, #root, main { 
-    height: auto !important; 
-    overflow: visible !important; 
-    background: white !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  
-  .overflow-auto, .overflow-y-auto, .h-screen, .h-full {
-    height: auto !important;
-    overflow: visible !important;
-  }
-  
-  .absolute { display: none !important; }
-  
-  .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
-  .bg-gray-50 { background-color: white !important; }
-  .border { border-color: #e5e7eb !important; }
-  
-  p, h1, h2, h3, h4, h5, h6, span, div { color: black !important; }
-  .text-white { color: black !important; }
-  .bg-gradient-to-r { background: none !important; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+    @page {
+        margin: 1cm;
+        size: A4;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    body,
+    #root,
+    main {
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .overflow-auto,
+    .overflow-y-auto,
+    .h-screen,
+    .h-full {
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    .absolute {
+        display: none !important;
+    }
+
+    .shadow-xl,
+    .shadow-lg,
+    .shadow-md,
+    .shadow-sm {
+        box-shadow: none !important;
+    }
+
+    .bg-gray-50 {
+        background-color: white !important;
+    }
+
+    .border {
+        border-color: #e5e7eb !important;
+    }
+
+    p,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    span,
+    div {
+        color: black !important;
+    }
+
+    .text-white {
+        color: black !important;
+    }
+
+    .bg-gradient-to-r {
+        background: none !important;
+        border-bottom: 2px solid #000;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .animate-fade-in {
-  animation: fade-in 0.4s ease-out forwards;
+    animation: fade-in 0.4s ease-out forwards;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up {
+    animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

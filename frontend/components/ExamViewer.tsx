@@ -42,6 +42,9 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
     const [practiceStats, setPracticeStats] = useState<Record<number, QuestionStatus>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [showPracticeResult, setShowPracticeResult] = useState(false);
+    const [isTimeTrial, setIsTimeTrial] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(4 * 60 * 60); // 4 hours
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
 
     if (!paper.solution) return null;
 
@@ -57,11 +60,46 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
     // --- Handlers ---
     const handlePrint = () => window.print();
 
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isTimerRunning && timeLeft > 0) {
+            interval = setInterval(() => {
+                setTimeLeft(prev => prev - 1);
+            }, 1000);
+        } else if (timeLeft === 0 && isTimerRunning) {
+            handleFinishExam();
+        }
+        return () => clearInterval(interval);
+    }, [isTimerRunning, timeLeft]);
+
+    const formatTime = (seconds: number) => {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${hrs}h ${mins}m ${secs}s`;
+    };
+
     const startPractice = () => {
         setMode('practice');
         setPracticeStats({});
         setCurrentQuestionIndex(0);
         setShowPracticeResult(false);
+        if (isTimeTrial) {
+            setTimeLeft(4 * 60 * 60);
+            setIsTimerRunning(true);
+        }
+    };
+
+    const handleFinishExam = () => {
+        setIsTimerRunning(false);
+        savePracticeSession();
+        setMode('review');
+        confetti({
+            particleCount: 150,
+            spread: 100,
+            origin: { y: 0.6 }
+        });
+        alert(`Zeit abgelaufen oder Prüfung abgegeben! Sie haben ${scorePercentage}% erreicht.`);
     };
 
     const handleAnswer = (status: QuestionStatus) => {
@@ -105,16 +143,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
             setShowPracticeResult(false);
         } else {
             // Finish and Save Progress
-            savePracticeSession();
-            setMode('review');
-
-            // Trigger big confetti for completion
-            confetti({
-                particleCount: 150,
-                spread: 100,
-                origin: { y: 0.6 }
-            });
-            alert(`Übung abgeschlossen! Sie haben ${scorePercentage}% erreicht (${correctCount}/${totalQuestions})`);
+            handleFinishExam();
         }
     };
 
@@ -150,6 +179,15 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                 <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                     {mode === 'review' ? (
                         <>
+                            <div className="flex items-center gap-3 mr-2 p-1 bg-gray-50 rounded-lg border border-gray-100">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase ml-2">Time-Trial</span>
+                                <button
+                                    onClick={() => setIsTimeTrial(!isTimeTrial)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isTimeTrial ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isTimeTrial ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
                             <button
                                 onClick={handlePrint}
                                 className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200 hidden md:flex"
@@ -162,21 +200,39 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                                 className="flex-1 md:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                             >
                                 <BrainCircuit size={18} />
-                                Übung beginnen
+                                {isTimeTrial ? 'Prüfung simulieren' : 'Übung beginnen'}
                             </button>
                         </>
                     ) : (
                         <div className="flex items-center gap-4">
+                            {isTimeTrial && (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg border border-red-100 font-mono font-bold text-sm">
+                                    <Clock size={16} className="animate-pulse" />
+                                    {formatTime(timeLeft)}
+                                </div>
+                            )}
                             <div className="text-right hidden md:block">
                                 <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Fortschritt</div>
                                 <div className="text-sm font-bold text-gray-700">{currentQuestionIndex + 1} / {totalQuestions}</div>
                             </div>
                             <button
-                                onClick={() => setMode('review')}
+                                onClick={() => {
+                                    if (isTimeTrial && !confirm('Simulation wirklich abbrechen? Ihr Fortschritt wird nicht gespeichert.')) return;
+                                    setMode('review');
+                                    setIsTimerRunning(false);
+                                }}
                                 className="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
                             >
-                                Beenden
+                                {isTimeTrial ? 'Abbrechen' : 'Beenden'}
                             </button>
+                            {isTimeTrial && (
+                                <button
+                                    onClick={handleFinishExam}
+                                    className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-all"
+                                >
+                                    Abgeben
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -205,6 +261,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                                 onNext={nextQuestion}
                                 showResult={showPracticeResult}
                                 currentStatus={practiceStats[currentQuestionIndex]}
+                                isTimeTrial={isTimeTrial}
                             />
                         </div>
                     </div>
@@ -263,9 +320,22 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                     {question.questionNumber}
                 </span>
                 <div>
-                    <span className="inline-block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
-                        {question.topic}
-                    </span>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                            {question.topic}
+                        </span>
+                        {question.points && (
+                            <span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100 font-bold">
+                                <Trophy size={10} /> {question.points} Pkt
+                            </span>
+                        )}
+                    </div>
+                    {question.contextScenario && (
+                        <div className="mb-3 p-3 bg-blue-50/50 border-l-4 border-blue-400 rounded-r text-sm text-blue-900 italic leading-relaxed">
+                            <span className="font-bold not-italic block mb-1">Situationsbeschreibung:</span>
+                            {question.contextScenario}
+                        </div>
+                    )}
                     <p className="text-gray-800 font-medium text-base leading-relaxed">
                         {question.questionText}
                     </p>
@@ -291,7 +361,15 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                         </div>
                     </div>
                     <div className="text-sm text-gray-600 pl-2 border-l-2 border-indigo-200">
-                        <span className="font-semibold text-indigo-900">Erklärung:</span> {question.explanation}
+                        <div className="mb-2">
+                            <span className="font-semibold text-indigo-900">Erklärung:</span> {question.explanation}
+                        </div>
+                        {question.pointsBreakdown && (
+                            <div className="bg-white/50 p-3 rounded border border-gray-100 text-xs">
+                                <span className="font-bold text-gray-700 block mb-1">Punkteverteilung:</span>
+                                <div className="text-gray-500 whitespace-pre-line">{question.pointsBreakdown}</div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -308,7 +386,8 @@ const PracticeCard: React.FC<{
     onNext: () => void;
     showResult: boolean;
     currentStatus: QuestionStatus;
-}> = ({ question, index, total, onResult, onNext, showResult, currentStatus }) => {
+    isTimeTrial?: boolean;
+}> = ({ question, index, total, onResult, onNext, showResult, currentStatus, isTimeTrial }) => {
 
     return (
         <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-white overflow-hidden animate-slide-up">
@@ -316,8 +395,21 @@ const PracticeCard: React.FC<{
             <div className="bg-indigo-600 p-6 text-white">
                 <div className="flex justify-between items-start opacity-90 mb-4">
                     <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-1 rounded">Frage {index + 1} von {total}</span>
-                    <span className="text-xs font-medium text-indigo-100">{question.topic}</span>
+                    <div className="flex items-center gap-2">
+                        {question.points && (
+                            <span className="text-xs font-bold bg-amber-400/30 px-2 py-1 rounded flex items-center gap-1 border border-amber-300/30">
+                                <Trophy size={12} /> {question.points} Pkt
+                            </span>
+                        )}
+                        <span className="text-xs font-medium text-indigo-100">{question.topic}</span>
+                    </div>
                 </div>
+                {question.contextScenario && (
+                    <div className="mb-4 p-4 bg-indigo-900/30 border-l-4 border-indigo-300 rounded-r text-sm text-indigo-50 italic leading-relaxed backdrop-blur-sm">
+                        <span className="font-bold not-italic block mb-1 text-indigo-200">Situationsbeschreibung:</span>
+                        {question.contextScenario}
+                    </div>
+                )}
                 <h3 className="text-xl md:text-2xl font-bold leading-snug">
                     {question.questionText}
                 </h3>
@@ -334,10 +426,11 @@ const PracticeCard: React.FC<{
                         </div>
 
                         <button
-                            onClick={() => onResult('unanswered')} // Just reveal first, logic handled better below
-                            className="w-full py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition-all active:scale-[0.98] shadow-sm border border-indigo-100"
+                            onClick={() => onResult('unanswered')} // Just reveal first
+                            disabled={isTimeTrial}
+                            className="w-full py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition-all active:scale-[0.98] shadow-sm border border-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Antwort aufdecken
+                            {isTimeTrial ? 'Lösung im Zeit-Trial deaktiviert' : 'Antwort aufdecken'}
                         </button>
                     </div>
                 ) : (
@@ -352,7 +445,15 @@ const PracticeCard: React.FC<{
                             </div>
 
                             <div className="p-4 bg-blue-50 text-blue-900 rounded-xl border border-blue-100 text-sm leading-relaxed">
-                                <span className="font-bold mr-1">Erklärung:</span> {question.explanation}
+                                <div className="mb-2">
+                                    <span className="font-bold mr-1">Erklärung:</span> {question.explanation}
+                                </div>
+                                {question.pointsBreakdown && (
+                                    <div className="bg-white/60 p-3 rounded-lg border border-blue-200/50 text-xs">
+                                        <span className="font-bold text-blue-800 block mb-1">Erwartete Punkteverteilung:</span>
+                                        <div className="text-blue-700 whitespace-pre-line">{question.pointsBreakdown}</div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

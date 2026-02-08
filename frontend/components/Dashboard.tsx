@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { ExamPaper, StudyPlan } from '../types';
+import { ExamPaper, StudyPlan, Specialization } from '../types';
 import FileUpload from './FileUpload';
 import { loadProgress } from './ExamViewer';
 import { ProgressData } from '../lib/api';
@@ -27,6 +27,8 @@ interface DashboardProps {
     onViewPaper: (paper: ExamPaper) => void;
     onGeneratePlan: () => void;
     onNavigateToPlan: () => void;
+    specialization: Specialization;
+    onNavigateToSettings: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -35,7 +37,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     onFileUpload,
     onViewPaper,
     onGeneratePlan,
-    onNavigateToPlan
+    onNavigateToPlan,
+    specialization,
+    onNavigateToSettings
 }) => {
     // --- Progress Tracking State ---
     const [progress, setProgress] = useState<ProgressData>({ sessions: [], questionsMastered: 0, questionsAttempted: 0 });
@@ -115,6 +119,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-gray-500 mt-1 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
                         {new Date().toLocaleDateString('de-DE', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        {specialization !== 'None' && (
+                            <>
+                                <span className="text-gray-300">•</span>
+                                <span className="text-indigo-600 font-medium">HQ: {specialization}</span>
+                            </>
+                        )}
                     </p>
                 </div>
 

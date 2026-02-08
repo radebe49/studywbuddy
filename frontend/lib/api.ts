@@ -89,6 +89,8 @@ export interface StudyGuide {
     id: string;
     topic: string;
     subject: string;
+    qualification_area?: 'BQ' | 'HQ';
+    handlungsbereich?: string;
     summary_markdown: string;
     key_concepts: string[];
     formulas: Array<{ name: string; formula: string; description: string }>;
@@ -97,6 +99,39 @@ export interface StudyGuide {
     quickTips?: string[];
     created_at?: string;
 }
+
+// IHK Taxonomy Constants for Frontend
+export const IHK_TAXONOMY = {
+    BQ: {
+        name: 'Basisqualifikationen',
+        subjects: [
+            'Rechtsbewusstes Handeln',
+            'Betriebswirtschaftliches Handeln',
+            'Anwendung von Methoden der Information, Kommunikation und Planung',
+            'Zusammenarbeit im Betrieb',
+            'Berücksichtigung naturwissenschaftlicher und technischer Gesetzmäßigkeiten (NTG)'
+        ]
+    },
+    HQ: {
+        name: 'Handlungsspezifische Qualifikationen',
+        handlungsbereiche: {
+            'Technik': [
+                'Infrastruktursysteme und Betriebstechnik',
+                'Automatisierungs- und Informationstechnik'
+            ],
+            'Organisation': [
+                'Betriebliches Kostenwesen',
+                'Planungs-, Steuerungs- und Kommunikationssysteme',
+                'Arbeits-, Umwelt- und Gesundheitsschutz'
+            ],
+            'Führung und Personal': [
+                'Personalführung',
+                'Personalentwicklung',
+                'Qualitätsmanagement'
+            ]
+        }
+    }
+} as const;
 
 export const listAvailableTopics = async (): Promise<string[]> => {
     const res = await api.get('/topics');
@@ -116,4 +151,16 @@ export const listStudyGuides = async (): Promise<Partial<StudyGuide>[]> => {
 export const getStudyGuide = async (id: string): Promise<StudyGuide> => {
     const res = await api.get(`/study-guides/${id}`);
     return res.data;
+};
+
+// --- Fachgespräch Bot API ---
+
+export interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+export const chatFachgespraech = async (messages: ChatMessage[], topic?: string): Promise<string> => {
+    const res = await api.post('/fachgespraech', { messages, context_topic: topic });
+    return res.data.content;
 };

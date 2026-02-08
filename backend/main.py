@@ -69,6 +69,15 @@ def health_check():
 class GeneratePlanRequest(BaseModel):
     exam_solutions: List[Dict[str, Any]]
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class FachgespraechRequest(BaseModel):
+    messages: List[ChatMessage]
+    context_topic: Optional[str] = None
+    context_questions: Optional[List[Dict[str, Any]]] = None
+
 # --- PDF Extraction ---
 def extract_text_from_pdf(file_path: str) -> str:
     try:
@@ -191,24 +200,86 @@ def parse_json_from_markdown(text: str):
 
 # --- Prompts ---
 
-EXAM_SYSTEM_PROMPT = """
-You are an expert academic tutor. Analyze the following extracted text from an exam paper. The output MUST be in German (Deutsch).
+# Official IHK Taxonomy for Industriemeister Elektrotechnik
+IHK_TAXONOMY = {
+    "BQ": {
+        "name": "Basisqualifikationen",
+        "subjects": [
+            "Rechtsbewusstes Handeln",
+            "Betriebswirtschaftliches Handeln",
+            "Anwendung von Methoden der Information, Kommunikation und Planung",
+            "Zusammenarbeit im Betrieb",
+            "Berücksichtigung naturwissenschaftlicher und technischer Gesetzmäßigkeiten (NTG)"
+        ]
+    },
+    "HQ": {
+        "name": "Handlungsspezifische Qualifikationen",
+        "subjects": {
+            "Technik": [
+                "Infrastruktursysteme und Betriebstechnik",
+                "Automatisierungs- und Informationstechnik"
+            ],
+            "Organisation": [
+                "Betriebliches Kostenwesen",
+                "Planungs-, Steuerungs- und Kommunikationssysteme",
+                "Arbeits-, Umwelt- und Gesundheitsschutz"
+            ],
+            "Führung und Personal": [
+                "Personalführung",
+                "Personalentwicklung",
+                "Qualitätsmanagement"
+            ]
+        }
+    }
+}
 
-IMPORTANT CONTEXT: Our NLP pre-processor has identified some candidate questions (provided below in `CANDIDATE_QUESTIONS`). 
+EXAM_SYSTEM_PROMPT = """
+You are an expert tutor for the German "Industriemeister Elektrotechnik IHK" examination.
+Analyze the following extracted text from an exam paper. The output MUST be in German (Deutsch).
+
+CRITICAL: Classify each question according to the OFFICIAL IHK TAXONOMY below:
+
+## Part A: Basisqualifikationen (BQ)
+1. Rechtsbewusstes Handeln (Arbeitsrecht, Umweltrecht, Vertragsrecht)
+2. Betriebswirtschaftliches Handeln (BWL, Rechnungswesen, Kostenrechnung)
+3. Anwendung von Methoden der Information, Kommunikation und Planung (Projektmanagement, Präsentation)
+4. Zusammenarbeit im Betrieb (Personalwesen, Führung, Sozialsysteme)
+5. Berücksichtigung naturwissenschaftlicher und technischer Gesetzmäßigkeiten (NTG) (Mathematik, Physik, Chemie, Statistik)
+
+## Part B: Handlungsspezifische Qualifikationen (HQ)
+### Handlungsbereich "Technik":
+- Infrastruktursysteme und Betriebstechnik
+- Automatisierungs- und Informationstechnik
+
+### Handlungsbereich "Organisation":
+- Betriebliches Kostenwesen
+- Planungs-, Steuerungs- und Kommunikationssysteme
+- Arbeits-, Umwelt- und Gesundheitsschutz
+
+### Handlungsbereich "Führung und Personal":
+- Personalführung
+- Personalentwicklung
+- Qualitätsmanagement
+
+IMPORTANT CONTEXT: Our NLP pre-processor has identified some candidate questions (provided below in `CANDIDATE_QUESTIONS`).
 Use these as a strong starting point, but verify and refine them. The candidates may be incomplete or slightly incorrect.
 You should also identify any questions the pre-processor may have MISSED in the raw text.
 
-1. Identify the subject and approximate year/level.
+1. Identify the qualification area (BQ or HQ) and the specific subject from the taxonomy above.
 2. For each validated question:
    - Solve it concisely but clearly in German.
    - Provide a brief explanation for the solution in German.
-   - Categorize it into a specific topic in German.
-   - Confirm the question type (Multiple Choice, True/False, Short Answer, Essay).
+   - Assign "qualificationArea" as either "BQ" or "HQ".
+   - Assign "subject" to one of the official IHK subjects listed above.
+   - Assign "topic" to a more specific sub-topic within that subject.
+   - Confirm the question type (Multiple Choice, True/False, Short Answer, Essay, Calculation).
 3. Summarize the overall difficulty and key topics covered in German.
 
 Return the result strictly as a valid JSON object matching this schema:
 {
-  "subject": "String",
+  "subject": "String (official IHK subject name)",
+  "qualificationArea": "BQ" | "HQ",
+  "handlungsbereich": "String (only for HQ: Technik, Organisation, or Führung und Personal)",
   "year": "String",
   "difficulty": "Easy" | "Medium" | "Hard",
   "topics": ["String"],
@@ -217,10 +288,12 @@ Return the result strictly as a valid JSON object matching this schema:
     {
       "questionNumber": "String",
       "questionText": "String",
-      "type": "Multiple Choice" | "True/False" | "Short Answer" | "Essay",
+      "type": "Multiple Choice" | "True/False" | "Short Answer" | "Essay" | "Calculation",
+      "qualificationArea": "BQ" | "HQ",
+      "subject": "String (official IHK subject name)",
+      "topic": "String (specific sub-topic)",
       "solution": "String",
-      "explanation": "String",
-      "topic": "String"
+      "explanation": "String"
     }
   ]
 }
@@ -248,6 +321,30 @@ Output valid JSON matching this schema:
     }
   ]
 }
+"""
+
+FACHGESPRAECH_SYSTEM_PROMPT = """
+You are a member of the "Prüfungsausschuss" (Examination Board) for the German "Industriemeister Elektrotechnik IHK" qualification. 
+Your role is to simulate the "Fachgespräch" (oral technical discussion/defense).
+
+SCENARIO:
+The user is preparing for the oral exam. Your goal is to probe their knowledge and ability to justify their technical decisions.
+
+INSTRUCTIONS:
+1.  **Identity**: You are a professional, slightly formal, but fair examiner. Use "Sie" (formal you).
+2.  **Technique**: Do NOT just tell them if they are right or wrong immediately. 
+3.  **Probing**: Ask "Why?" and "How?". 
+    - "Warum haben Sie sich für dieses Schutzorgan entschieden?"
+    - "Welche VDE-Vorschrift liegt hier zugrunde?"
+    - "Was wäre die Konsequenz, wenn wir den Leitungsquerschnitt verringern?"
+4.  **Feedback**: Provide subtle hints if they are stuck, but encourage them to find the answer themselves.
+5.  **Grading**: After several exchanges, if you feel they have demonstrated competence or failure, provide a brief evaluation of their "Handlungskompetenz" (ability to act/competence) in German.
+
+CURRENT CONTEXT:
+Topic: {topic}
+
+RESPONSE GUIDELINE:
+Keep responses concise, professional, and entirely in German.
 """
 
 STUDY_GUIDE_PROMPT = """
@@ -639,6 +736,42 @@ def list_available_topics():
         return sorted(list(topics))
     except Exception as e:
         print(f"Error listing topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fachgespraech")
+async def chat_fachgespraech(request: FachgespraechRequest):
+    """Simulate a Fachgespräch (oral exam defense)."""
+    try:
+        model = genai.GenerativeModel(SELECTED_MODEL)
+        
+        # Prepare history for Gemini
+        chat_history = []
+        for msg in request.messages[:-1]: # All but the last one
+            chat_history.append({
+                "role": "user" if msg.role == "user" else "model",
+                "parts": [msg.content]
+            })
+        
+        system_instructions = FACHGESPRAECH_SYSTEM_PROMPT.format(
+            topic=request.context_topic or "Elektrotechnik Allgemein"
+        )
+        
+        # Start a chat session
+        chat = model.start_chat(history=chat_history)
+        
+        # Send system prompt as the first message or personality instruction
+        # Note: Gemini 1.5 prefers system_instruction in GenerativeModel init, 
+        # but for this script's patterns we can prefix the first message or use it as a preamble.
+        # However, to maintain flow, we'll just send the last message with the context.
+        
+        last_user_message = request.messages[-1].content
+        prompt = f"{system_instructions}\n\nUser Question/Answer: {last_user_message}"
+        
+        response = chat.send_message(prompt)
+        
+        return {"role": "assistant", "content": response.text}
+    except Exception as e:
+        print(f"Error in fachgespraech: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

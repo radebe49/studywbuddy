@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ExamPaper, StudyPlan, ViewState } from '../types';
+import { ExamPaper, StudyPlan, ViewState, Specialization } from '../types';
 import Sidebar from '../components/Sidebar';
 import Dashboard from '../components/Dashboard';
 import ExamViewer from '../components/ExamViewer';
 import StudyPlanView from '../components/StudyPlanView';
 import StudyGuides from '../components/StudyGuides';
+import Settings from '../components/Settings';
+import FachgespraechBot from '../components/FachgespraechBot';
 import { Menu } from 'lucide-react';
 import * as api from '../lib/api';
 
@@ -19,6 +21,18 @@ const App: React.FC = () => {
     const [selectedPaperId, setSelectedPaperId] = useState<string | undefined>(undefined);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [specialization, setSpecialization] = useState<Specialization>('Infrastruktursysteme und Betriebstechnik');
+
+    // --- Persist Specialization ---
+    useEffect(() => {
+        const saved = localStorage.getItem('user_specialization') as Specialization;
+        if (saved) setSpecialization(saved);
+    }, []);
+
+    const handleSpecializationChange = (spec: Specialization) => {
+        setSpecialization(spec);
+        localStorage.setItem('user_specialization', spec);
+    };
 
     // --- Data Fetching ---
     const refreshPapers = async () => {
@@ -129,7 +143,20 @@ const App: React.FC = () => {
         }
 
         if (activeView === 'study-guides') {
-            return <StudyGuides />;
+            return <StudyGuides specialization={specialization} />;
+        }
+
+        if (activeView === 'fachgespraech') {
+            return <FachgespraechBot />;
+        }
+
+        if (activeView === 'settings') {
+            return (
+                <Settings
+                    specialization={specialization}
+                    onSpecializationChange={handleSpecializationChange}
+                />
+            );
         }
 
         // Default to Dashboard
@@ -141,6 +168,8 @@ const App: React.FC = () => {
                 onViewPaper={handleSelectPaper}
                 onGeneratePlan={handleCreateStudyPlan}
                 onNavigateToPlan={() => handleNavigate('study-plan')}
+                specialization={specialization}
+                onNavigateToSettings={() => handleNavigate('settings')}
             />
         );
     };

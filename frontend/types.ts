@@ -1,5 +1,7 @@
 
-export type ViewState = 'dashboard' | 'study-plan' | 'paper-details' | 'study-guides';
+export type ViewState = 'dashboard' | 'study-plan' | 'paper-details' | 'study-guides' | 'settings' | 'fachgespraech';
+
+export type Specialization = 'Infrastruktursysteme und Betriebstechnik' | 'Automatisierungs- und Informationstechnik' | 'None';
 
 export interface ExamPaper {
     id: string;
@@ -12,8 +14,16 @@ export interface ExamPaper {
     error_message?: string;
 }
 
+// IHK Qualification Areas
+export type QualificationArea = 'BQ' | 'HQ';
+
+// Official IHK Handlungsbereiche for HQ
+export type Handlungsbereich = 'Technik' | 'Organisation' | 'Führung und Personal';
+
 export interface ExamSolution {
     subject: string;
+    qualificationArea?: QualificationArea;
+    handlungsbereich?: Handlungsbereich;
     year?: string;
     difficulty: 'Easy' | 'Medium' | 'Hard';
     topics: string[];
@@ -23,10 +33,15 @@ export interface ExamSolution {
 
 export interface QuestionAnalysis {
     questionNumber: string;
+    contextScenario?: string; // Situationsbeschreibung for HQ
     questionText: string;
     solution: string;
     explanation: string;
+    qualificationArea?: QualificationArea;
+    subject?: string;
     topic: string;
+    points?: number; // Estimated IHK points
+    pointsBreakdown?: string; // Breakdown of point allocation
 }
 
 export interface StudyPlanDay {
