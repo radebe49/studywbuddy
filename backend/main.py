@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import re
 from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body
@@ -30,7 +31,7 @@ genai.configure(api_key=GOOGLE_API_KEY)
 
 SELECTED_MODEL = "gemini-3-flash-preview"
 
-app = FastAPI(title="StudyWBuddy API")
+app = FastAPI(title="DadTutor API")
 
 # CORS
 app.add_middleware(
@@ -40,10 +41,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-def read_root():
-    return {"status": "online", "message": "StudyWBuddy API is running"}
 
 # --- Models ---
 
@@ -63,6 +60,89 @@ def extract_text_from_pdf(file_path: str) -> str:
     except Exception as e:
         print(f"Error extracting PDF text: {e}")
         return ""
+
+# --- NLP PIPELINE: Regex-Based Question Extraction ---
+
+def pre_extract_questions(text: str) -> List[Dict[str, Any]]:
+    """
+    Uses regex and heuristics to identify potential question blocks.
+    Returns a list of candidate questions with metadata.
+    """
+    candidates = []
+    
+    # --- Regex Patterns ---
+    # Pattern 1: Numbered questions (1., 2., Q1, Question 1, etc.)
+    numbered_pattern = re.compile(
+        r'(?:^|\n)\s*(?:(?:Q(?:uestion)?\s*)?([0-9]+)[.)]\s*)(.+?)(?=(?:\n\s*(?:Q(?:uestion)?\s*)?[0-9]+[.)])|\Z)',
+        re.IGNORECASE | re.DOTALL
+    )
+    
+    # Pattern 2: MCQ options (a), b), c), d) or A. B. C. D.)
+    mcq_options_pattern = re.compile(
+        r'[\(\[]?[a-dA-D][\).]\s*.+',
+        re.MULTILINE
+    )
+    
+    # Pattern 3: True/False indicators
+    tf_pattern = re.compile(
+        r'\b(?:True\s*(?:\/|or)?\s*False|T\s*\/\s*F)\b',
+        re.IGNORECASE
+    )
+
+    # Pattern 4: Essay/Long form ("Discuss", "Explain", "Describe")
+    essay_keywords_pattern = re.compile(
+        r'\b(?:Discuss|Explain|Describe|Analyze|Evaluate|Compare|Contrast|Justify|Elaborate)\b',
+        re.IGNORECASE
+    )
+    
+    # Pattern 5: Short Answer ("Define", "List", "Name", "State")
+    short_answer_keywords_pattern = re.compile(
+        r'\b(?:Define|List|Name|State|Identify|What is|Give an example)\b',
+        re.IGNORECASE
+    )
+
+    # --- Extraction ---
+    matches = numbered_pattern.findall(text)
+    
+    for i, match in enumerate(matches):
+        q_num = match[0].strip()
+        q_text = match[1].strip()
+        
+        # Trim excessive whitespace/newlines within question text
+        q_text = re.sub(r'\s+', ' ', q_text)
+        
+        if len(q_text) < 10:  # Skip fragments too short to be questions
+            continue
+
+        # --- Classify Question Type ---
+        q_type = "Unknown"
+        if mcq_options_pattern.search(q_text):
+            q_type = "Multiple Choice"
+        elif tf_pattern.search(q_text):
+            q_type = "True/False"
+        elif essay_keywords_pattern.search(q_text):
+            q_type = "Essay"
+        elif short_answer_keywords_pattern.search(q_text):
+            q_type = "Short Answer"
+        else:
+            q_type = "Short Answer"  # Default fallback
+            
+        candidates.append({
+            "questionNumber": q_num,
+            "questionText": q_text,
+            "type": q_type,
+            "source": "regex"
+        })
+        
+    # Fallback: If regex finds very few questions, the raw text will still be sent to AI.
+    if len(candidates) < 2:
+        print("NLP Pre-extraction: Low question count from regex, relying more on AI.")
+        # Return an empty list; the main prompt will handle it from raw text.
+        # This is intentional to avoid sending bad data.
+        # We could also add a "rawTextChunks" fallback here later.
+        
+    print(f"NLP Pre-extraction: Found {len(candidates)} candidate questions.")
+    return candidates
 
 # --- JSON Parsing ---
 def parse_json_from_markdown(text: str):
@@ -92,12 +172,17 @@ def parse_json_from_markdown(text: str):
 EXAM_SYSTEM_PROMPT = """
 You are an expert academic tutor. Analyze the following extracted text from an exam paper.
 
+IMPORTANT CONTEXT: Our NLP pre-processor has identified some candidate questions (provided below in `CANDIDATE_QUESTIONS`). 
+Use these as a strong starting point, but verify and refine them. The candidates may be incomplete or slightly incorrect.
+You should also identify any questions the pre-processor may have MISSED in the raw text.
+
 1. Identify the subject and approximate year/level.
-2. Extract the main questions.
-3. Solve each question concisely but clearly.
-4. Provide a brief explanation for the solution.
-5. Categorize each question into a specific topic.
-6. Summarize the overall difficulty and key topics covered.
+2. For each validated question:
+   - Solve it concisely but clearly.
+   - Provide a brief explanation for the solution.
+   - Categorize it into a specific topic.
+   - Confirm the question type (Multiple Choice, True/False, Short Answer, Essay).
+3. Summarize the overall difficulty and key topics covered.
 
 Return the result strictly as a valid JSON object matching this schema:
 {
@@ -110,6 +195,7 @@ Return the result strictly as a valid JSON object matching this schema:
     {
       "questionNumber": "String",
       "questionText": "String",
+      "type": "Multiple Choice" | "True/False" | "Short Answer" | "Essay",
       "solution": "String",
       "explanation": "String",
       "topic": "String"
@@ -153,11 +239,28 @@ def process_exam_background(exam_id: str, file_path: str):
         if not raw_text:
             raise ValueError("Could not extract text from PDF")
 
+        # --- NLP Pre-Processing Step ---
+        print(f"Running NLP pre-extraction for exam {exam_id}...")
+        candidate_questions = pre_extract_questions(raw_text)
+        
+        # Format candidates for the prompt
+        candidates_json_str = json.dumps(candidate_questions, indent=2) if candidate_questions else "(None found by pre-processor)"
+
         print(f"Calling Gemini ({SELECTED_MODEL}) for exam {exam_id}...")
         model = genai.GenerativeModel(SELECTED_MODEL)
         
+        # Enhanced prompt with pre-extracted candidates
+        full_prompt = f"""{EXAM_SYSTEM_PROMPT}
+
+--- CANDIDATE_QUESTIONS (from NLP pre-processor) ---
+{candidates_json_str}
+
+--- RAW TEXT (verify and find any missed questions) ---
+{raw_text[:400000]}
+"""
+        
         response = model.generate_content(
-            f"{EXAM_SYSTEM_PROMPT}\n\nText content:\n{raw_text[:500000]}", 
+            full_prompt, 
             generation_config={"response_mime_type": "application/json"}
         )
         
