@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 mb-1">
                             ExamPilot
                         </h1>
-                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">AI Study Companion</p>
+                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">KI-Lernbegleiter</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -83,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Search papers, subjects..."
+                            placeholder="Arbeiten, Fächer suchen..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-gray-400"
@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 <div className="p-4 space-y-2">
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Menu</div>
+                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Menü</div>
 
                     <button
                         onClick={() => onNavigate('dashboard')}
@@ -107,7 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         className={getNavItemClass(activeView === 'study-plan')}
                     >
                         <Calendar size={18} />
-                        Study Plan
+                        Lernplan
                     </button>
 
                     <button
@@ -115,25 +115,25 @@ const Sidebar: React.FC<SidebarProps> = ({
                         className={getNavItemClass(activeView === 'study-guides')}
                     >
                         <FileText size={18} />
-                        Study Guides
+                        Lernleitfäden
                     </button>
 
                     <button
                         onClick={onImportClick}
                         className="mt-4 w-full py-3 px-4 bg-gray-900 hover:bg-black text-white rounded-xl font-medium shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
                     >
-                        <Plus size={18} /> Import Papers
+                        <Plus size={18} /> Arbeiten importieren
                     </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 custom-scrollbar">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2 mt-6">
-                        {searchTerm ? 'Search Results' : 'Recent Papers'}
+                        {searchTerm ? 'Suchergebnisse' : 'Neueste Arbeiten'}
                     </div>
 
                     {filteredPapers.length === 0 && (
                         <div className="text-center py-8 px-4 text-gray-400 text-sm italic">
-                            {searchTerm ? 'No matches found.' : 'No papers yet.'}
+                            {searchTerm ? 'Keine Treffer gefunden.' : 'Noch keine Arbeiten.'}
                         </div>
                     )}
 
@@ -162,8 +162,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 </p>
                                 <p className="text-xs text-gray-400 truncate">
                                     {paper.solution ? paper.solution.subject :
-                                        paper.status === 'processing' ? 'Processing...' :
-                                            paper.status === 'failed' ? 'Analysis Failed' : 'Ready'}
+                                        paper.status === 'processing' ? 'Verarbeitung...' :
+                                            paper.status === 'failed' ? 'Analyse fehlgeschlagen' : 'Bereit'}
                                 </p>
                             </div>
                         </button>

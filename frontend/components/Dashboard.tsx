@@ -111,10 +111,10 @@ const Dashboard: React.FC<DashboardProps> = ({
             {/* Header */}
             <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Overview</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Übersicht</h1>
                     <p className="text-gray-500 mt-1 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        {new Date().toLocaleDateString('de-DE', { weekday: 'long', month: 'long', day: 'numeric' })}
                     </p>
                 </div>
 
@@ -125,7 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-all shadow-sm active:scale-95"
                     >
                         <Plus size={18} />
-                        <span className="hidden md:inline">Quick Upload</span>
+                        <span className="hidden md:inline">Schnell-Upload</span>
                         <input
                             type="file"
                             id="fileInput"
@@ -152,14 +152,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <TrendingUp size={100} />
                     </div>
                     <div className="relative z-10">
-                        <p className="text-indigo-200 font-medium text-sm mb-1">Weekly Velocity</p>
+                        <p className="text-indigo-200 font-medium text-sm mb-1">Wöchentliche Geschwindigkeit</p>
                         <div className="flex items-baseline gap-2">
                             <h3 className="text-4xl font-bold">{stats.papersThisWeek}</h3>
-                            <span className="text-indigo-200 text-sm">papers analyzed</span>
+                            <span className="text-indigo-200 text-sm">Arbeiten analysiert</span>
                         </div>
                         <div className="mt-6 flex items-center gap-2 text-xs font-medium text-indigo-100 bg-white/10 w-fit px-3 py-1 rounded-full">
                             <Zap size={12} className="text-yellow-300 fill-yellow-300" />
-                            {stats.uniqueTopics} topics covered across all subjects
+                            {stats.uniqueTopics} Themen in allen Fächern abgedeckt
                         </div>
                     </div>
                 </div>
@@ -169,10 +169,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-gray-500">
                             <Brain size={18} />
-                            <span className="text-sm font-medium">Cognitive Load</span>
+                            <span className="text-sm font-medium">Kognitive Belastung</span>
                         </div>
                         <div className="text-2xl font-bold text-gray-800">{stats.hardCount}</div>
-                        <div className="text-xs text-gray-400">Challenging papers solved</div>
+                        <div className="text-xs text-gray-400">Anspruchsvolle Arbeiten gelöst</div>
                     </div>
                     <div className="w-full bg-gray-100 h-2 rounded-full mt-4 overflow-hidden flex">
                         <div className="bg-green-400 h-full" style={{ width: '40%' }}></div>
@@ -180,9 +180,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className="bg-red-400 h-full" style={{ width: '30%' }}></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium uppercase">
-                        <span>Easy</span>
-                        <span>Med</span>
-                        <span>Hard</span>
+                        <span>Leicht</span>
+                        <span>Mittel</span>
+                        <span>Schwer</span>
                     </div>
                 </div>
 
@@ -191,16 +191,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-gray-500">
                             <FileText size={18} />
-                            <span className="text-sm font-medium">Library</span>
+                            <span className="text-sm font-medium">Bibliothek</span>
                         </div>
                         <div className="text-2xl font-bold text-gray-800">{stats.totalPapers}</div>
-                        <div className="text-xs text-gray-400">Total documents stored</div>
+                        <div className="text-xs text-gray-400">Gesamte Dokumente gespeichert</div>
                     </div>
                     <button
                         onClick={() => document.getElementById('fileInput')?.click()}
                         className="mt-4 text-xs font-semibold text-indigo-600 flex items-center gap-1 hover:gap-2 transition-all"
                     >
-                        Add more <ArrowUpRight size={12} />
+                        Mehr hinzufügen <ArrowUpRight size={12} />
                     </button>
                 </div>
             </div>
@@ -213,19 +213,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <Trophy size={100} />
                     </div>
                     <div className="relative z-10">
-                        <p className="text-emerald-200 font-medium text-sm mb-1">Practice Mastery</p>
+                        <p className="text-emerald-200 font-medium text-sm mb-1">Übungsbeherrschung</p>
                         <div className="flex items-baseline gap-2">
                             <h3 className="text-4xl font-bold">{progressMetrics.masteryRate}%</h3>
-                            <span className="text-emerald-200 text-sm">accuracy rate</span>
+                            <span className="text-emerald-200 text-sm">Genauigkeitsrate</span>
                         </div>
                         <div className="mt-4 flex items-center gap-4 text-sm">
                             <div className="bg-white/10 px-3 py-1 rounded-full flex items-center gap-1">
                                 <CheckCircle2 size={14} />
-                                <span>{progress.questionsMastered} mastered</span>
+                                <span>{progress.questionsMastered} gemeistert</span>
                             </div>
                             <div className="bg-white/10 px-3 py-1 rounded-full flex items-center gap-1">
                                 <BarChart3 size={14} />
-                                <span>{progress.questionsAttempted} attempted</span>
+                                <span>{progress.questionsAttempted} versucht</span>
                             </div>
                         </div>
                     </div>
@@ -236,10 +236,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-gray-500">
                             <Flame size={18} className={progressMetrics.streak > 0 ? 'text-orange-500' : ''} />
-                            <span className="text-sm font-medium">Study Streak</span>
+                            <span className="text-sm font-medium">Lernsträhne</span>
                         </div>
                         <div className="text-2xl font-bold text-gray-800">{progressMetrics.streak}</div>
-                        <div className="text-xs text-gray-400">{progressMetrics.streak === 1 ? 'day' : 'days'} in a row</div>
+                        <div className="text-xs text-gray-400">{progressMetrics.streak === 1 ? 'Tag' : 'Tage'} in Folge</div>
                     </div>
                     <div className="flex gap-1 mt-4">
                         {[...Array(7)].map((_, i) => (
@@ -257,10 +257,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                         <div className="flex items-center gap-2 mb-2 text-gray-500">
                             <Brain size={18} />
-                            <span className="text-sm font-medium">Sessions</span>
+                            <span className="text-sm font-medium">Sitzungen</span>
                         </div>
                         <div className="text-2xl font-bold text-gray-800">{progressMetrics.totalSessions}</div>
-                        <div className="text-xs text-gray-400">Practice tests completed</div>
+                        <div className="text-xs text-gray-400">Übungstests abgeschlossen</div>
                     </div>
                     {progressMetrics.recentSessions.length > 0 && (
                         <div className="mt-4 space-y-1">
@@ -285,11 +285,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                 <Target className="text-indigo-600" size={20} />
-                                Today's Focus
+                                Heutiger Fokus
                             </h3>
                             {studyPlan && (
                                 <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider">
-                                    Day {todaysTasks?.day}
+                                    Tag {todaysTasks?.day}
                                 </span>
                             )}
                         </div>
@@ -301,15 +301,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         <div>
                                             <h4 className="text-lg font-bold text-gray-900">{todaysTasks.focus}</h4>
                                             <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                                                <span className="flex items-center gap-1"><Clock size={14} /> {todaysTasks.durationMinutes} mins</span>
-                                                <span className="flex items-center gap-1"><Calendar size={14} /> {new Date().toLocaleDateString()}</span>
+                                                <span className="flex items-center gap-1"><Clock size={14} /> {todaysTasks.durationMinutes} Min.</span>
+                                                <span className="flex items-center gap-1"><Calendar size={14} /> {new Date().toLocaleDateString('de-DE')}</span>
                                             </div>
                                         </div>
                                         <button
                                             onClick={onNavigateToPlan}
                                             className="text-indigo-600 text-sm font-medium hover:underline"
                                         >
-                                            View Full Plan
+                                            Vollständigen Plan ansehen
                                         </button>
                                     </div>
 
@@ -329,23 +329,23 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <Target className="text-gray-400" size={24} />
                                     </div>
-                                    <h3 className="font-semibold text-gray-900 mb-1">No Active Plan</h3>
+                                    <h3 className="font-semibold text-gray-900 mb-1">Kein aktiver Plan</h3>
                                     <p className="text-gray-500 text-sm mb-4 max-w-xs mx-auto">
-                                        Generate a personalized study schedule based on your recent exam performance.
+                                        Erstellen Sie einen personalisierten Lernplan basierend auf Ihrer letzten Prüfungsleistung.
                                     </p>
                                     {stats.solvedCount > 0 ? (
                                         <button
                                             onClick={onGeneratePlan}
                                             className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium shadow-md hover:bg-black transition-all"
                                         >
-                                            Generate Plan Now
+                                            Plan jetzt erstellen
                                         </button>
                                     ) : (
                                         <button
                                             onClick={() => document.getElementById('fileInput')?.click()}
                                             className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium shadow-md hover:bg-indigo-700 transition-all"
                                         >
-                                            Upload First Paper
+                                            Erste Arbeit hochladen
                                         </button>
                                     )}
                                 </div>
@@ -357,10 +357,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                             <Clock className="text-gray-400" size={20} />
-                            Recent Files
+                            Neueste Dateien
                         </h3>
                         {papers.length === 0 ? (
-                            <p className="text-gray-400 text-sm italic">No files processed yet.</p>
+                            <p className="text-gray-400 text-sm italic">Noch keine Dateien verarbeitet.</p>
                         ) : (
                             <div className="divide-y divide-gray-100">
                                 {papers.slice().reverse().slice(0, 3).map(paper => (
@@ -371,24 +371,22 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paper.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
-                                                paper.status === 'failed' ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-500'
+                                                paper.status === 'failed' ? 'bg-red-100 text-red-600' :
+                                                    'bg-gray-100 text-gray-500'
                                                 }`}>
                                                 {paper.status === 'completed' ? <CheckCircle2 size={16} /> :
-                                                    paper.status === 'failed' ? <AlertCircle size={16} /> : <FileText size={16} />}
+                                                    paper.status === 'failed' ? <AlertCircle size={16} /> :
+                                                        <FileText size={16} />}
                                             </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors truncate max-w-[180px]">
+                                            <div className="w-full">
+                                                <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
                                                     {paper.name}
                                                 </p>
-                                                {paper.status === 'failed' ? (
-                                                    <p className="text-xs text-red-500 font-medium truncate max-w-[180px]" title={paper.error_message}>
-                                                        {paper.error_message || 'Analysis Failed'}
-                                                    </p>
-                                                ) : (
-                                                    <p className="text-xs text-gray-500">
-                                                        {paper.status === 'completed' ? paper.solution?.subject : 'Processing...'}
-                                                    </p>
-                                                )}
+                                                <p className={`text-xs ${paper.status === 'failed' ? 'text-red-500 line-clamp-1' : 'text-gray-500'}`} title={paper.status === 'failed' ? paper.error_message : undefined}>
+                                                    {paper.status === 'completed' ? paper.solution?.subject :
+                                                        paper.status === 'failed' ? (paper.error_message || 'Analyse fehlgeschlagen') :
+                                                            'Verarbeitung...'}
+                                                </p>
                                             </div>
                                         </div>
                                         <ArrowUpRight size={16} className="text-gray-300 group-hover:text-indigo-500" />
@@ -404,18 +402,18 @@ const Dashboard: React.FC<DashboardProps> = ({
 
                     {/* Weakness/Topics Widget */}
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                        <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase tracking-wider">Knowledge Base</h3>
+                        <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase tracking-wider">Wissensdatenbank</h3>
                         {stats.uniqueTopics > 0 ? (
                             <div className="space-y-4">
                                 <div className="p-3 bg-orange-50 rounded-xl border border-orange-100">
-                                    <p className="text-xs font-semibold text-orange-700 mb-1">Recommended Focus</p>
+                                    <p className="text-xs font-semibold text-orange-700 mb-1">Empfohlener Fokus</p>
                                     <p className="text-sm text-orange-900 font-medium">
-                                        Based on your "Hard" papers, review complex topics in {papers.find(p => p.solution?.difficulty === 'Hard')?.solution?.subject || 'your subjects'}.
+                                        Basierend auf Ihren "schweren" Arbeiten, wiederholen Sie komplexe Themen in {papers.find(p => p.solution?.difficulty === 'Hard')?.solution?.subject || 'Ihren Fächern'}.
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs text-gray-400 mb-2 font-medium">RECENT TOPICS</p>
+                                    <p className="text-xs text-gray-400 mb-2 font-medium">AKTUELLE THEMEN</p>
                                     <div className="flex flex-wrap gap-2">
                                         {Array.from(new Set(papers.flatMap(p => p.solution?.topics || []))).slice(0, 5).map((t, i) => (
                                             <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
@@ -424,7 +422,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         ))}
                                         {stats.uniqueTopics > 5 && (
                                             <span className="px-2 py-1 bg-gray-50 text-gray-400 rounded text-xs">
-                                                +{stats.uniqueTopics - 5} more
+                                                +{stats.uniqueTopics - 5} mehr
                                             </span>
                                         )}
                                     </div>
@@ -433,7 +431,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         ) : (
                             <div className="text-center py-6 text-gray-400 text-sm">
                                 <Brain size={32} className="mx-auto mb-2 opacity-20" />
-                                Analyze papers to unlock insights.
+                                Analysieren Sie Arbeiten, um Erkenntnisse freizuschalten.
                             </div>
                         )}
                     </div>
@@ -441,16 +439,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {/* Empty State / Tips (if no data) */}
                     {stats.totalPapers === 0 && (
                         <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 text-gray-300 shadow-md">
-                            <h3 className="text-white font-bold mb-2">Pro Tip</h3>
+                            <h3 className="text-white font-bold mb-2">Profi-Tipp</h3>
                             <p className="text-sm leading-relaxed">
-                                Upload at least 3 exam papers to get a highly accurate Weekly Study Plan generated by the AI.
+                                Laden Sie mindestens 3 Prüfungsarbeiten hoch, um einen hochpräzisen wöchentlichen Lernplan von der KI zu erhalten.
                             </p>
                         </div>
                     )}
 
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

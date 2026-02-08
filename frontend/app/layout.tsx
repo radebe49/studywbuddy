@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
     title: "ExamPilot AI",
-    description: "Your AI Study Companion",
+    description: "Ihr KI-Lernbegleiter",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" suppressHydrationWarning>
+        <html lang="de" suppressHydrationWarning>
             <head>
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
             </head>

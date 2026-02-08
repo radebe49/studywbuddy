@@ -36,11 +36,33 @@ app = FastAPI(title="DadTutor API")
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*", "https://studywbuddy.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+def health_check():
+    """Check if the backend is running and connected to services."""
+    status = {"status": "ok", "services": {}}
+    
+    # Check Supabase
+    try:
+        supabase.table("exams").select("count", count="exact").execute()
+        status["services"]["supabase"] = "connected"
+    except Exception as e:
+        status["services"]["supabase"] = f"error: {str(e)}"
+        status["status"] = "degraded"
+
+    # Check Gemini (simple model list or check api key presence)
+    if GOOGLE_API_KEY:
+        status["services"]["gemini"] = "configured"
+    else:
+        status["services"]["gemini"] = "missing_key"
+        status["status"] = "degraded"
+        
+    return status
 
 # --- Models ---
 
@@ -49,14 +71,17 @@ class GeneratePlanRequest(BaseModel):
 
 # --- PDF Extraction ---
 def extract_text_from_pdf(file_path: str) -> str:
-    # No try-except here; let exceptions bubble up to be caught by the background task
-    reader = PdfReader(file_path)
-    text = ""
-    for page in reader.pages:
-        result = page.extract_text()
-        if result:
-            text += result + "\n"
-    return text
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            result = page.extract_text()
+            if result:
+                text += result + "\n"
+        return text
+    except Exception as e:
+        print(f"Error extracting PDF text: {e}")
+        return ""
 
 # --- NLP PIPELINE: Regex-Based Question Extraction ---
 
@@ -167,7 +192,7 @@ def parse_json_from_markdown(text: str):
 # --- Prompts ---
 
 EXAM_SYSTEM_PROMPT = """
-You are an expert academic tutor. Analyze the following extracted text from an exam paper.
+You are an expert academic tutor. Analyze the following extracted text from an exam paper. The output MUST be in German (Deutsch).
 
 IMPORTANT CONTEXT: Our NLP pre-processor has identified some candidate questions (provided below in `CANDIDATE_QUESTIONS`). 
 Use these as a strong starting point, but verify and refine them. The candidates may be incomplete or slightly incorrect.
@@ -175,11 +200,11 @@ You should also identify any questions the pre-processor may have MISSED in the 
 
 1. Identify the subject and approximate year/level.
 2. For each validated question:
-   - Solve it concisely but clearly.
-   - Provide a brief explanation for the solution.
-   - Categorize it into a specific topic.
+   - Solve it concisely but clearly in German.
+   - Provide a brief explanation for the solution in German.
+   - Categorize it into a specific topic in German.
    - Confirm the question type (Multiple Choice, True/False, Short Answer, Essay).
-3. Summarize the overall difficulty and key topics covered.
+3. Summarize the overall difficulty and key topics covered in German.
 
 Return the result strictly as a valid JSON object matching this schema:
 {
@@ -202,7 +227,7 @@ Return the result strictly as a valid JSON object matching this schema:
 """
 
 PLAN_SYSTEM_PROMPT = """
-Based on the following analysis of past exam papers, create a comprehensive 7-day study plan to help a student master these subjects.
+Based on the following analysis of past exam papers, create a comprehensive 7-day study plan in German (Deutsch) to help a student master these subjects.
 
 Focus on:
 1. Weak areas implied by "Hard" difficulty papers or complex topics.
@@ -226,7 +251,7 @@ Output valid JSON matching this schema:
 """
 
 STUDY_GUIDE_PROMPT = """
-You are an expert tutor. Based on the following exam questions about "{topic}", create a comprehensive study guide / cheat sheet.
+You are an expert tutor. Based on the following exam questions about "{topic}", create a comprehensive study guide / cheat sheet in German (Deutsch).
 
 QUESTIONS ABOUT THIS TOPIC:
 {questions}
@@ -330,9 +355,9 @@ def process_exam_background(exam_id: str, file_path: str):
         
         # Check for specific Google AI errors
         if "429" in error_msg:
-            error_msg = "AI Usage Limit Exceeded (Quota). Please try again later."
+            error_msg = "KI-Nutzungslimit überschritten (Quote). Bitte versuchen Sie es später erneut."
         elif "500" in error_msg and "Google" in error_msg:
-            error_msg = "AI Service Error. Please retry."
+            error_msg = "KI-Dienstfehler. Bitte versuchen Sie es erneut."
             
         supabase.table("exams").update({
             "status": "failed",
@@ -569,8 +594,11 @@ async def generate_study_guide(request: GenerateStudyGuideRequest):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error generating study guide: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return a more descriptive error if possible (careful not to leak sensitive info, but detailed enough for debugging)
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @app.get("/study-guides")
 def list_study_guides():

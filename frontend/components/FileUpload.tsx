@@ -15,7 +15,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
             if (pdfFiles.length > 0) {
                 onFileUpload(pdfFiles);
             } else {
-                alert("Please upload PDF files only.");
+                alert("Bitte laden Sie nur PDF-Dateien hoch.");
             }
         }
     }, [onFileUpload]);
@@ -52,8 +52,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
                 <Upload className="w-6 h-6 md:w-8 md:h-8 text-indigo-600" />
             </div>
 
-            <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1">Import Exam Papers</h3>
-            <p className="text-xs md:text-sm text-gray-500 px-4 text-center">Drag & drop PDFs here or tap to browse</p>
+            <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1">Prüfungsarbeiten importieren</h3>
+            <p className="text-xs md:text-sm text-gray-500 px-4 text-center">PDFs hierher ziehen oder tippen zum Durchsuchen</p>
 
             <div className="mt-3 md:mt-4 flex gap-2">
                 <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-500 flex items-center gap-1">

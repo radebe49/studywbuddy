@@ -114,7 +114,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                 spread: 100,
                 origin: { y: 0.6 }
             });
-            alert(`Practice Complete! You scored ${scorePercentage}% (${correctCount}/${totalQuestions})`);
+            alert(`Übung abgeschlossen! Sie haben ${scorePercentage}% erreicht (${correctCount}/${totalQuestions})`);
         }
     };
 
@@ -142,7 +142,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                             <span>•</span>
                             <span>{paper.solution.subject}</span>
                             <span>•</span>
-                            <span>{paper.solution.year || 'Unknown Year'}</span>
+                            <span>{paper.solution.year || 'Unbekanntes Jahr'}</span>
                         </div>
                     </div>
                 </div>
@@ -155,27 +155,27 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                                 className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200 hidden md:flex"
                             >
                                 <Download size={16} />
-                                Export
+                                Exportieren
                             </button>
                             <button
                                 onClick={startPractice}
                                 className="flex-1 md:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                             >
                                 <BrainCircuit size={18} />
-                                Start Practice
+                                Übung beginnen
                             </button>
                         </>
                     ) : (
                         <div className="flex items-center gap-4">
                             <div className="text-right hidden md:block">
-                                <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Progress</div>
+                                <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Fortschritt</div>
                                 <div className="text-sm font-bold text-gray-700">{currentQuestionIndex + 1} / {totalQuestions}</div>
                             </div>
                             <button
                                 onClick={() => setMode('review')}
                                 className="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
                             >
-                                Exit
+                                Beenden
                             </button>
                         </div>
                     )}
@@ -224,7 +224,7 @@ const ReviewModeView: React.FC<{ paper: ExamPaper }> = ({ paper }) => {
                 <div className="bg-white rounded-xl p-6 border border-indigo-50 shadow-sm">
                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-2 flex items-center gap-2">
                         <BookOpen size={16} className="text-indigo-500" />
-                        Executive Summary
+                        Zusammenfassung
                     </h3>
                     <p className="text-gray-600 leading-relaxed text-sm">
                         {paper.solution?.summary}
@@ -246,7 +246,7 @@ const ReviewModeView: React.FC<{ paper: ExamPaper }> = ({ paper }) => {
                 </div>
 
                 <div className="text-center pt-8 pb-12 text-gray-400 text-sm">
-                    End of Document
+                    Ende des Dokuments
                 </div>
             </div>
         </div>
@@ -277,21 +277,21 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                     onClick={() => setShowExplanation(!showExplanation)}
                     className="text-indigo-600 text-sm font-semibold flex items-center gap-2 hover:text-indigo-700 transition-colors mb-4 focus:outline-none"
                 >
-                    {showExplanation ? 'Hide Answer' : 'Show Answer'}
+                    {showExplanation ? 'Antwort verbergen' : 'Antwort anzeigen'}
                     <ChevronLeft size={14} className={`transition-transform ${showExplanation ? '-rotate-90' : 'rotate-180'}`} />
                 </button>
 
                 <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showExplanation ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                     <div className="bg-green-50/50 border border-green-100 rounded-lg p-4 mb-3">
                         <div className="text-xs font-bold text-green-700 uppercase mb-1 flex items-center gap-1">
-                            <CheckCircle size={12} /> Correct Answer
+                            <CheckCircle size={12} /> Richtige Antwort
                         </div>
                         <div className="text-gray-900 font-medium text-sm">
                             {question.solution}
                         </div>
                     </div>
                     <div className="text-sm text-gray-600 pl-2 border-l-2 border-indigo-200">
-                        <span className="font-semibold text-indigo-900">Explanation:</span> {question.explanation}
+                        <span className="font-semibold text-indigo-900">Erklärung:</span> {question.explanation}
                     </div>
                 </div>
             </div>
@@ -315,7 +315,7 @@ const PracticeCard: React.FC<{
             {/* Question Header */}
             <div className="bg-indigo-600 p-6 text-white">
                 <div className="flex justify-between items-start opacity-90 mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-1 rounded">Question {index + 1} of {total}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-1 rounded">Frage {index + 1} von {total}</span>
                     <span className="text-xs font-medium text-indigo-100">{question.topic}</span>
                 </div>
                 <h3 className="text-xl md:text-2xl font-bold leading-snug">
@@ -329,15 +329,15 @@ const PracticeCard: React.FC<{
                     <div className="space-y-6">
                         <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-500">
                             <BrainCircuit size={48} className="mx-auto mb-4 text-gray-300" />
-                            <p className="text-sm font-medium">Take a moment to solve this yourself.</p>
-                            <p className="text-xs mt-1">Write it down or think of the answer.</p>
+                            <p className="text-sm font-medium">Nehmen Sie sich einen Moment Zeit, um dies selbst zu lösen.</p>
+                            <p className="text-xs mt-1">Schreiben Sie es auf oder denken Sie an die Antwort.</p>
                         </div>
 
                         <button
                             onClick={() => onResult('unanswered')} // Just reveal first, logic handled better below
                             className="w-full py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition-all active:scale-[0.98] shadow-sm border border-indigo-100"
                         >
-                            Reveal Answer
+                            Antwort aufdecken
                         </button>
                     </div>
                 ) : (
@@ -345,35 +345,35 @@ const PracticeCard: React.FC<{
                         {/* Result Content */}
                         <div className="space-y-4">
                             <div className="p-4 bg-gray-900 text-white rounded-xl shadow-inner">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Answer</div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Antwort</div>
                                 <div className="font-mono text-sm md:text-base leading-relaxed">
                                     {question.solution}
                                 </div>
                             </div>
 
                             <div className="p-4 bg-blue-50 text-blue-900 rounded-xl border border-blue-100 text-sm leading-relaxed">
-                                <span className="font-bold mr-1">Explanation:</span> {question.explanation}
+                                <span className="font-bold mr-1">Erklärung:</span> {question.explanation}
                             </div>
                         </div>
 
                         {/* Self Grading */}
                         {!currentStatus || currentStatus === 'unanswered' ? (
                             <div className="pt-4 border-t border-gray-100">
-                                <p className="text-center text-sm font-bold text-gray-900 mb-4">Did you get it right?</p>
+                                <p className="text-center text-sm font-bold text-gray-900 mb-4">Haben Sie es richtig gemacht?</p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => onResult('incorrect')}
                                         className="py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl border border-red-200 transition-all flex items-center justify-center gap-2"
                                     >
                                         <XCircle size={18} />
-                                        Incorrect
+                                        Falsch
                                     </button>
                                     <button
                                         onClick={() => onResult('correct')}
                                         className="py-3 bg-green-50 hover:bg-green-100 text-green-600 font-bold rounded-xl border border-green-200 transition-all flex items-center justify-center gap-2 shadow-sm"
                                     >
                                         <CheckCircle size={18} />
-                                        Correct
+                                        Richtig
                                     </button>
                                 </div>
                             </div>
@@ -382,14 +382,14 @@ const PracticeCard: React.FC<{
                                 <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm mb-6 ${currentStatus === 'correct' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                                     }`}>
                                     {currentStatus === 'correct' ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                                    {currentStatus === 'correct' ? 'Marked Correct' : 'Marked Incorrect'}
+                                    {currentStatus === 'correct' ? 'Als Richtig markiert' : 'Als Falsch markiert'}
                                 </div>
 
                                 <button
                                     onClick={onNext}
                                     className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl transition-all shadow-lg shadow-gray-200 flex items-center justify-center gap-2"
                                 >
-                                    {index < total - 1 ? 'Next Question' : 'Finish Practice'}
+                                    {index < total - 1 ? 'Nächste Frage' : 'Übung beenden'}
                                     <ChevronRight size={18} />
                                 </button>
                             </div>

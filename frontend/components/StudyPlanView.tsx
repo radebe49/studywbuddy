@@ -21,9 +21,9 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                 <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
                     <Calendar size={48} className="text-indigo-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">Your Personal Study Schedule</h2>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">Ihr persönlicher Lernplan</h2>
                 <p className="text-gray-500 max-w-md mb-8">
-                    ExamPilot can analyze your solved papers to create a tailored 7-day revision strategy focusing on your weak areas.
+                    ExamPilot kann Ihre gelösten Arbeiten analysieren, um eine maßgeschneiderte 7-Tage-Revisionsstrategie zu erstellen, die sich auf Ihre Schwachstellen konzentriert.
                 </p>
 
                 {hasSolvedPapers ? (
@@ -35,19 +35,19 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                         {isGenerating ? (
                             <>
                                 <Sparkles size={20} className="animate-spin text-yellow-300" />
-                                Designing your plan...
+                                Lernplan wird erstellt...
                             </>
                         ) : (
                             <>
                                 <Sparkles size={20} className="text-yellow-300" />
-                                Generate AI Study Plan
+                                KI-Lernplan erstellen
                             </>
                         )}
                     </button>
                 ) : (
                     <div className="flex items-center gap-2 px-6 py-3 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                         <AlertCircle size={20} />
-                        <span className="font-medium">Upload and analyze papers first to generate a plan.</span>
+                        <span className="font-medium">Laden Sie zuerst Arbeiten hoch und analysieren Sie diese, um einen Plan zu erstellen.</span>
                     </div>
                 )}
             </div>
@@ -61,7 +61,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
             <button
                 onClick={handlePrint}
                 className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors z-10 no-print"
-                title="Export as PDF"
+                title="Als PDF exportieren"
             >
                 <Download size={20} />
             </button>
@@ -85,7 +85,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                             <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
                                 <div className="flex-shrink-0">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex flex-col items-center justify-center border border-emerald-100">
-                                        <span className="text-xs font-bold uppercase">Day</span>
+                                        <span className="text-xs font-bold uppercase">Tag</span>
                                         <span className="text-lg font-bold">{day.day}</span>
                                     </div>
                                 </div>
@@ -95,8 +95,8 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                                         {day.focus}
                                     </h3>
                                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                                        <span className="flex items-center gap-1"><Clock size={12} /> {day.durationMinutes} mins</span>
-                                        <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(day.date).toLocaleDateString()}</span>
+                                        <span className="flex items-center gap-1"><Clock size={12} /> {day.durationMinutes} Min.</span>
+                                        <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(day.date).toLocaleDateString('de-DE')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -117,7 +117,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                             onClick={onGenerate}
                             className="text-sm text-gray-400 hover:text-indigo-600 underline transition-colors no-print"
                         >
-                            Regenerate Plan from latest papers
+                            Plan aus neuesten Arbeiten neu erstellen
                         </button>
                     </div>
                 </div>

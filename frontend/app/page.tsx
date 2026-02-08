@@ -62,14 +62,14 @@ const App: React.FC = () => {
             await api.uploadExams(files);
             await refreshPapers(); // Immediate refresh
         } catch (e) {
-            alert("Upload failed");
+            alert("Upload fehlgeschlagen");
         }
     };
 
     const handleCreateStudyPlan = async () => {
         const solvedPapers = papers.filter(p => p.status === 'completed' && p.solution);
         if (solvedPapers.length === 0) {
-            alert("Please upload and solve at least one exam paper first.");
+            alert("Bitte laden Sie zuerst mindestens eine Prüfungsarbeit hoch und lösen Sie diese.");
             return;
         }
 
@@ -82,7 +82,7 @@ const App: React.FC = () => {
             const plan = await api.generateStudyPlan(solutions);
             setStudyPlan(plan);
         } catch (e) {
-            alert("Failed to generate study plan. Please try again.");
+            alert("Fehler beim Erstellen des Lernplans. Bitte versuchen Sie es erneut.");
             console.error(e);
             setActiveView('dashboard');
         } finally {
