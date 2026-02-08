@@ -16,7 +16,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "canvas-confetti": "^1.9.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
@@ -26,6 +27,7 @@
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4.1.18",
+    "@types/canvas-confetti": "^1.6.4",
     "typescript": "^5.9.3"
   }
 }
