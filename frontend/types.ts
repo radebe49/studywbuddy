@@ -1,5 +1,5 @@
 
-export type ViewState = 'dashboard' | 'study-plan' | 'paper-details';
+export type ViewState = 'dashboard' | 'study-plan' | 'paper-details' | 'study-guides';
 
 export interface ExamPaper {
     id: string;

@@ -81,3 +81,38 @@ export const getExamProgress = async (examId: string): Promise<PracticeSessionFr
     const res = await api.get(`/progress/exam/${examId}`);
     return res.data;
 };
+
+// --- Study Guides API ---
+
+export interface StudyGuide {
+    id: string;
+    topic: string;
+    subject: string;
+    summary_markdown: string;
+    key_concepts: string[];
+    formulas: Array<{ name: string; formula: string; description: string }>;
+    common_mistakes: Array<{ mistake: string; correction: string }>;
+    example_questions: Array<{ problem: string; solution: string }>;
+    quickTips?: string[];
+    created_at?: string;
+}
+
+export const listAvailableTopics = async (): Promise<string[]> => {
+    const res = await api.get('/topics');
+    return res.data;
+};
+
+export const generateStudyGuide = async (topic: string): Promise<StudyGuide> => {
+    const res = await api.post('/study-guides/generate', { topic });
+    return res.data;
+};
+
+export const listStudyGuides = async (): Promise<Partial<StudyGuide>[]> => {
+    const res = await api.get('/study-guides');
+    return res.data;
+};
+
+export const getStudyGuide = async (id: string): Promise<StudyGuide> => {
+    const res = await api.get(`/study-guides/${id}`);
+    return res.data;
+};

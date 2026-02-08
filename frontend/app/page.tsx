@@ -6,6 +6,7 @@ import Sidebar from '../components/Sidebar';
 import Dashboard from '../components/Dashboard';
 import ExamViewer from '../components/ExamViewer';
 import StudyPlanView from '../components/StudyPlanView';
+import StudyGuides from '../components/StudyGuides';
 import { Menu } from 'lucide-react';
 import * as api from '../lib/api';
 
@@ -125,6 +126,10 @@ const App: React.FC = () => {
                     isGenerating={isGeneratingPlan}
                 />
             );
+        }
+
+        if (activeView === 'study-guides') {
+            return <StudyGuides />;
         }
 
         // Default to Dashboard

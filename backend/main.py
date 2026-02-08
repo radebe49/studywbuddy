@@ -228,6 +228,50 @@ Output valid JSON matching this schema:
 }
 """
 
+STUDY_GUIDE_PROMPT = """
+You are an expert tutor. Based on the following exam questions about "{topic}", create a comprehensive study guide / cheat sheet.
+
+QUESTIONS ABOUT THIS TOPIC:
+{questions}
+
+Create a study guide that includes:
+
+1. **Summary**: A concise 2-3 paragraph explanation of the core concepts related to this topic.
+2. **Key Concepts**: The most important ideas a student MUST understand, as bullet points.
+3. **Formulas/Rules**: Any formulas, theorems, or rules that apply (if applicable). Use LaTeX notation.
+4. **Common Mistakes**: What students typically get wrong and how to avoid it.
+5. **Example Problems**: 2-3 worked examples with step-by-step solutions.
+6. **Quick Tips**: Memory tricks, shortcuts, or study strategies.
+
+Output valid JSON matching this schema:
+{
+  "topic": "String",
+  "subject": "String",
+  "summary": "String (markdown formatted)",
+  "keyConcepts": ["String", "String"],
+  "formulas": [
+    {
+      "name": "String",
+      "formula": "String (LaTeX)",
+      "description": "String"
+    }
+  ],
+  "commonMistakes": [
+    {
+      "mistake": "String",
+      "correction": "String"
+    }
+  ],
+  "exampleProblems": [
+    {
+      "problem": "String",
+      "solution": "String (step by step)"
+    }
+  ],
+  "quickTips": ["String", "String"]
+}
+"""
+
 # --- Background Task ---
 
 def process_exam_background(exam_id: str, file_path: str):
@@ -420,6 +464,145 @@ def get_exam_progress(exam_id: str):
         return res.data or []
     except Exception as e:
         print(f"Error fetching exam progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Study Guide / Topic Summary Endpoints ---
+
+class GenerateStudyGuideRequest(BaseModel):
+    topic: str
+    exam_ids: Optional[List[str]] = None  # If None, aggregate from all exams
+
+@app.post("/study-guides/generate")
+async def generate_study_guide(request: GenerateStudyGuideRequest):
+    """Generate a study guide for a specific topic by aggregating questions from exams."""
+    try:
+        # 1. Fetch exam solutions to aggregate questions by topic
+        if request.exam_ids:
+            # Filter to specific exams
+            res = supabase.table("study_plans").select("*").in_("exam_id", request.exam_ids).execute()
+        else:
+            # Get all completed exams
+            res = supabase.table("study_plans").select("*").execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="No exam data found")
+        
+        # 2. Extract questions matching the topic
+        topic_lower = request.topic.lower()
+        related_questions = []
+        subject = None
+        source_exam_ids = []
+        
+        for row in res.data:
+            raw_json = row.get("raw_json", {})
+            if not subject:
+                subject = raw_json.get("subject")
+            
+            questions = raw_json.get("questions", [])
+            for q in questions:
+                q_topic = q.get("topic", "").lower()
+                if topic_lower in q_topic or q_topic in topic_lower:
+                    related_questions.append({
+                        "questionText": q.get("questionText", ""),
+                        "solution": q.get("solution", ""),
+                        "explanation": q.get("explanation", "")
+                    })
+                    if row.get("exam_id") not in source_exam_ids:
+                        source_exam_ids.append(row.get("exam_id"))
+        
+        if not related_questions:
+            raise HTTPException(status_code=404, detail=f"No questions found for topic: {request.topic}")
+        
+        # 3. Generate study guide using LLM
+        questions_text = "\n\n".join([
+            f"Q: {q['questionText']}\nA: {q['solution']}\nExplanation: {q['explanation']}"
+            for q in related_questions[:10]  # Limit to 10 questions to avoid token overflow
+        ])
+        
+        prompt = STUDY_GUIDE_PROMPT.format(topic=request.topic, questions=questions_text)
+        
+        print(f"Generating study guide for topic: {request.topic}...")
+        model = genai.GenerativeModel(SELECTED_MODEL)
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        
+        guide_json = parse_json_from_markdown(response.text)
+        
+        # 4. Save to database
+        summary_data = {
+            "topic": request.topic,
+            "subject": subject or guide_json.get("subject"),
+            "summary_markdown": guide_json.get("summary", ""),
+            "key_concepts": guide_json.get("keyConcepts", []),
+            "formulas": guide_json.get("formulas", []),
+            "common_mistakes": guide_json.get("commonMistakes", []),
+            "example_questions": guide_json.get("exampleProblems", []),
+            "source_exam_ids": source_exam_ids
+        }
+        
+        # Check if guide already exists for this topic (upsert)
+        existing = supabase.table("topic_summaries").select("id").eq("topic", request.topic).execute()
+        if existing.data:
+            supabase.table("topic_summaries").update(summary_data).eq("topic", request.topic).execute()
+            guide_id = existing.data[0]["id"]
+        else:
+            insert_res = supabase.table("topic_summaries").insert(summary_data).execute()
+            guide_id = insert_res.data[0]["id"]
+        
+        return {
+            "id": guide_id,
+            "topic": request.topic,
+            "questionsUsed": len(related_questions),
+            **guide_json
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating study guide: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/study-guides")
+def list_study_guides():
+    """List all generated study guides."""
+    try:
+        res = supabase.table("topic_summaries").select("id, topic, subject, created_at, updated_at").order("updated_at", desc=True).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"Error listing study guides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/study-guides/{guide_id}")
+def get_study_guide(guide_id: str):
+    """Get a specific study guide by ID."""
+    try:
+        res = supabase.table("topic_summaries").select("*").eq("id", guide_id).single().execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Study guide not found")
+        return res.data
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching study guide: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/topics")
+def list_available_topics():
+    """List all unique topics found across all exams (for generating study guides)."""
+    try:
+        res = supabase.table("study_plans").select("raw_json").execute()
+        topics = set()
+        for row in res.data or []:
+            raw_json = row.get("raw_json", {})
+            for q in raw_json.get("questions", []):
+                topic = q.get("topic")
+                if topic:
+                    topics.add(topic)
+        return sorted(list(topics))
+    except Exception as e:
+        print(f"Error listing topics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

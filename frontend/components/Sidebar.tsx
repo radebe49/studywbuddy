@@ -111,6 +111,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
 
                     <button
+                        onClick={() => onNavigate('study-guides')}
+                        className={getNavItemClass(activeView === 'study-guides')}
+                    >
+                        <FileText size={18} />
+                        Study Guides
+                    </button>
+
+                    <button
                         onClick={onImportClick}
                         className="mt-4 w-full py-3 px-4 bg-gray-900 hover:bg-black text-white rounded-xl font-medium shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
                     >
