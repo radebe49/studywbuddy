@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { Specialization } from '../types';
 import { Settings as SettingsIcon, GraduationCap, Briefcase, Info, Check } from 'lucide-react';

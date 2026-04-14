@@ -2,24 +2,20 @@
 import axios from 'axios';
 import { ExamPaper, ExamSolution, StudyPlan } from '../types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const APP_SECRET = process.env.NEXT_PUBLIC_APP_SECRET;
+import { supabase } from './supabase';
 
-if (!APP_SECRET) {
-    // Surface misconfiguration loudly in dev; in prod this still throws rather than
-    // shipping a well-known default secret that would nullify the shared-secret gate.
-    const msg =
-        '[api] NEXT_PUBLIC_APP_SECRET is not set. Configure it in .env.local (dev) ' +
-        'or the deployment environment before building the frontend.';
-    if (typeof window !== 'undefined') console.error(msg);
-    throw new Error(msg);
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
     baseURL: API_URL,
-    headers: {
-        'X-App-Secret': APP_SECRET,
-    },
+});
+
+api.interceptors.request.use(async (config) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    return config;
 });
 
 export const uploadExams = async (files: File[]): Promise<void> => {
@@ -169,6 +165,16 @@ export const listStudyGuides = async (): Promise<Partial<StudyGuide>[]> => {
 
 export const getStudyGuide = async (id: string): Promise<StudyGuide> => {
     const res = await api.get(`/study-guides/${id}`);
+    return res.data;
+};
+
+export const deleteStudyGuide = async (id: string): Promise<{ message: string }> => {
+    const res = await api.delete(`/study-guides/${id}`);
+    return res.data;
+};
+
+export const deleteExam = async (id: string): Promise<{ message: string }> => {
+    const res = await api.delete(`/exams/${id}`);
     return res.data;
 };
 

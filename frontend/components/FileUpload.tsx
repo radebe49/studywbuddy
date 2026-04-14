@@ -1,24 +1,35 @@
-import React, { useCallback } from 'react';
-import { Upload, FileText } from 'lucide-react';
+"use client";
+
+import React, { useCallback, useState } from 'react';
+import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface FileUploadProps {
     onFileUpload: (files: File[]) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
+    const { toast } = useToast();
+
     const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
 
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const pdfFiles = Array.from(e.dataTransfer.files).filter((f: File) => f.type === 'application/pdf');
+            const allFiles = Array.from(e.dataTransfer.files);
+            const pdfFiles = allFiles.filter((f: File) => f.type === 'application/pdf');
+            
+            if (pdfFiles.length !== allFiles.length) {
+                toast("Einige Dateien wurden ignoriert, da nur PDF-Dateien erlaubt sind.", "error");
+            }
+            
             if (pdfFiles.length > 0) {
                 onFileUpload(pdfFiles);
             } else {
-                alert("Bitte laden Sie nur PDF-Dateien hoch.");
+                toast("Bitte laden Sie mindestens eine PDF-Datei hoch.", "error");
             }
         }
-    }, [onFileUpload]);
+    }, [onFileUpload, toast]);
 
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();

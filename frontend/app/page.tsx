@@ -9,12 +9,36 @@ import StudyPlanView from '../components/StudyPlanView';
 import StudyGuides from '../components/StudyGuides';
 import Settings from '../components/Settings';
 import FachgespraechBot from '../components/FachgespraechBot';
-import { Menu } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useToast } from '../components/Toast';
+import { LogOut, Menu } from 'lucide-react';
 import * as api from '../lib/api';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+    const { toast } = useToast();
+    const { user, loading, signOut } = useAuth();
+    const router = useRouter();
     const [papers, setPapers] = useState<ExamPaper[]>([]);
     const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null);
+
+    // --- Auth Guard ---
+    useEffect(() => {
+        if (!loading && !user) {
+            router.push('/auth');
+        }
+    }, [user, loading, router]);
+
+    if (loading || !user) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-white">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-gray-500 font-medium">Authentifizierung...</p>
+                </div>
+            </div>
+        );
+    }
 
     // --- UI State ---
     const [activeView, setActiveView] = useState<ViewState>('dashboard');
@@ -50,7 +74,26 @@ const App: React.FC = () => {
         try {
             await api.updateSettings(spec);
         } catch (e) {
-            console.error("Failed to backup settings to server", e);
+            console.error('Failed to start extraction', e);
+            toast("Upload fehlgeschlagen", "error");
+        }
+    };
+
+    const handleDeletePaper = async (id: string) => {
+        if (!confirm("Sind Sie sicher, dass Sie diese Prüfungsarbeit und alle zugehörigen Daten löschen möchten?")) return;
+        
+        try {
+            toast("Lösche Dokument...", "loading");
+            await api.deleteExam(id);
+            setPapers(prev => prev.filter(p => p.id !== id));
+            toast("Dokument erfolgreich gelöscht", "success");
+            if (selectedPaperId === id) {
+                setSelectedPaperId(undefined);
+                setActiveView('dashboard');
+            }
+        } catch (e) {
+            console.error("Delete failed", e);
+            toast("Fehler beim Löschen des Dokuments", "error");
         }
     };
 
@@ -143,7 +186,7 @@ const App: React.FC = () => {
             await api.uploadExams(files);
             await refreshPapers(); // Immediate refresh
         } catch (e) {
-            alert("Upload fehlgeschlagen");
+            toast("Upload fehlgeschlagen", "error");
         }
     };
 
@@ -152,14 +195,15 @@ const App: React.FC = () => {
             await api.retryExam(paperId);
             await refreshPapers();
         } catch (e) {
-            alert("Retry fehlgeschlagen. Möglicherweise ist die Datei nicht mehr auf dem Server vorhanden.");
+            console.error('Retry failed', e);
+            toast("Retry fehlgeschlagen. Möglicherweise ist die Datei nicht mehr auf dem Server vorhanden.", "error");
         }
     };
 
     const handleCreateStudyPlan = async () => {
         const solvedPapers = papers.filter(p => p.status === 'completed' && p.solution);
         if (solvedPapers.length === 0) {
-            alert("Bitte laden Sie zuerst mindestens eine Prüfungsarbeit hoch und lösen Sie diese.");
+            toast("Bitte laden Sie zuerst mindestens eine Prüfungsarbeit hoch und lösen Sie diese.", "info");
             return;
         }
 
@@ -172,8 +216,8 @@ const App: React.FC = () => {
             const plan = await api.generateStudyPlan(solutions);
             setStudyPlan(plan);
         } catch (e) {
-            alert("Fehler beim Erstellen des Lernplans. Bitte versuchen Sie es erneut.");
-            console.error(e);
+            console.error('Failed to generate study plan', e);
+            toast("Fehler beim Erstellen des Lernplans. Bitte versuchen Sie es erneut.", "error");
             setActiveView('dashboard');
         } finally {
             setIsGeneratingPlan(false);
@@ -263,6 +307,8 @@ const App: React.FC = () => {
                 onImportClick={() => document.getElementById('fileInput')?.click()}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
+                userEmail={user?.email}
+                onSignOut={signOut}
             />
 
             <main className="flex-1 bg-white relative overflow-hidden flex flex-col w-full">
@@ -288,6 +334,10 @@ const App: React.FC = () => {
             </main>
         </div>
     );
+};
+
+const App: React.FC = () => {
+    return <AppContent />;
 };
 
 export default App;

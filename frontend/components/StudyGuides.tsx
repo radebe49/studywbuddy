@@ -1,8 +1,11 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
-import { StudyGuide, listAvailableTopics, listStudyGuides, generateStudyGuide, getStudyGuide, IHK_TAXONOMY } from '../lib/api';
+import { StudyGuide, listAvailableTopics, listStudyGuides, generateStudyGuide, getStudyGuide, IHK_TAXONOMY, deleteStudyGuide } from '../lib/api';
 import { Specialization } from '../types';
-import { BookOpen, Sparkles, ChevronRight, ChevronDown, FileText, AlertCircle, Loader2, ArrowLeft, Bookmark, Zap, CheckCircle2, GraduationCap, Briefcase, Trophy, BrainCircuit } from 'lucide-react';
+import { BookOpen, Sparkles, ChevronRight, ChevronDown, FileText, AlertCircle, Loader2, ArrowLeft, Bookmark, Zap, CheckCircle2, GraduationCap, Briefcase, Trophy, BrainCircuit, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useToast } from './Toast';
 
 // Helper to categorize a topic/subject into the IHK taxonomy
 const categorizeSubject = (subject: string): { area: 'BQ' | 'HQ' | 'Sonstige'; handlungsbereich?: string } => {
@@ -67,6 +70,7 @@ interface StudyGuidesProps {
 }
 
 const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
+    const { toast } = useToast();
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [topics, setTopics] = useState<string[]>([]);
     const [guides, setGuides] = useState<Partial<StudyGuide>[]>([]);
@@ -108,9 +112,28 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
             setView('detail');
         } catch (e) {
             console.error('Failed to generate guide:', e);
-            alert('Fehler beim Erstellen des Lernleitfadens. Bitte versuchen Sie es erneut.');
+            toast("Fehler beim Generieren des Leitfadens", "error");
         } finally {
             setGeneratingTopic(null);
+        }
+    };
+
+    const handleDeleteGuide = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Sind Sie sicher, dass Sie diesen Study Guide löschen möchten?")) return;
+        
+        try {
+            toast("Lösche Study Guide...", "loading");
+            await deleteStudyGuide(id);
+            setGuides(prev => prev.filter(g => g.id !== id));
+            toast("Study Guide gelöscht", "success");
+            if (selectedGuide?.id === id) {
+                setSelectedGuide(null);
+                setView('list');
+            }
+        } catch (e) {
+            console.error("Delete failed", e);
+            toast("Fehler beim Löschen", "error");
         }
     };
 
@@ -175,14 +198,23 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
             onClick={() => guide.id && handleViewGuide(guide.id)}
             className="group flex flex-col justify-between py-4 px-1 border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer transition-colors"
         >
-            <div>
-                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-widest block mb-1">
-                    {new Date(guide.created_at || '').toLocaleDateString('de-DE')}
-                </span>
-                <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors text-sm">
-                    {guide.topic}
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">{guide.subject}</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-widest block mb-1">
+                        {new Date(guide.created_at || '').toLocaleDateString('de-DE')}
+                    </span>
+                    <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors text-sm">
+                        {guide.topic}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">{guide.subject}</p>
+                </div>
+                <button
+                    onClick={(e) => guide.id && handleDeleteGuide(guide.id, e)}
+                    className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    title="Löschen"
+                >
+                    <Trash2 size={16} />
+                </button>
             </div>
             <div className="mt-4 flex items-center text-xs font-medium text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
                 Leitfaden öffnen <ChevronRight size={14} className="ml-1" />

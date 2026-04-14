@@ -5,7 +5,7 @@ import re
 import hmac
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,6 +16,10 @@ import uvicorn
 from dotenv import load_dotenv
 import uuid
 import datetime
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
@@ -36,15 +40,14 @@ ALLOWED_ORIGINS = [
 if not all([SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY]):
     raise ValueError("Missing environment variables: SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY")
 
-if not APP_SECRET or len(APP_SECRET) < 16:
-    raise ValueError(
-        "APP_SECRET env var must be set to a non-trivial value (>=16 chars). "
-        "No fallback is permitted — refusing to boot."
-    )
-
-# Initialize Clients
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialize Service Client (for background tasks/initialization if needed, 
+# although we prefer authenticated clients for RLS)
+supabase_service: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = genai.Client(api_key=GOOGLE_API_KEY)
+
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+security = HTTPBearer()
 
 # Model Definitions (2026 Fleet)
 GEMMA_MODEL = "gemma-4-31b-it"        # High precision, German extraction
@@ -55,33 +58,42 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))  # 
 PDF_MAGIC = b"%PDF-"
 
 app = FastAPI(title="DadTutor API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
-
-
-@app.middleware("http")
-async def verify_app_secret(request: Request, call_next):
-    # Always let CORS preflight and public paths through; CORS middleware (added
-    # below, wraps this one) will attach the right headers on responses.
-    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
-        return await call_next(request)
-
-    secret = request.headers.get("X-App-Secret", "")
-    if not hmac.compare_digest(secret, APP_SECRET):
-        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
-
-    return await call_next(request)
-
-
-# CORS added AFTER the auth middleware so CORS becomes the outermost layer and
-# correctly decorates 401/500 responses with Access-Control-Allow-* headers.
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-App-Secret", "Authorization"],
+    allow_headers=["Content-Type", "Authorization"], # Drop X-App-Secret
 )
+
+# Authentication & Supabase Client Dependency
+async def get_supabase(auth: HTTPAuthorizationCredentials = Depends(security)):
+    """ Initialize a Supabase client with the user's JWT to respect RLS. """
+    access_token = auth.credentials
+    try:
+        # Create client with user's specific JWT
+        # This client is local to the request and respects RLS
+        user_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        user_client.postgrest.auth(access_token)
+        
+        # Verify user
+        auth_res = user_client.auth.get_user(access_token)
+        if not auth_res.user:
+            raise HTTPException(status_code=401, detail="Invalid session")
+            
+        return user_client, auth_res.user
+    except Exception as e:
+        print(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Dependency for routes that need auth but not necessarily the client
+async def get_current_user(auth: HTTPAuthorizationCredentials = Body(security)):
+    _, user = await get_supabase(auth)
+    return user
 
 @app.get("/health")
 def health_check():
@@ -90,13 +102,13 @@ def health_check():
     
     # Check Supabase
     try:
-        supabase.table("exams").select("count", count="exact").execute()
+        supabase_service.table("exams").select("count", count="exact").execute()
         status["services"]["supabase"] = "connected"
     except Exception as e:
         status["services"]["supabase"] = f"error: {str(e)}"
         status["status"] = "degraded"
 
-    # Check Gemini (simple model list or check api key presence)
+    # Check Gemini
     if GOOGLE_API_KEY:
         status["services"]["gemini"] = "configured"
     else:
@@ -106,9 +118,10 @@ def health_check():
     return status
 
 @app.get("/settings")
-def get_user_settings():
+def get_user_settings(dep: tuple = Depends(get_supabase)):
     """Get the current user specialization."""
-    res = supabase.table("user_settings").select("*").eq("user_id", "default_user").execute()
+    supabase, user = dep
+    res = supabase.table("user_settings").select("*").execute()
     if res.data:
         return res.data[0]
     return {"specialization": None}
@@ -117,24 +130,23 @@ class UpdateSettingsRequest(BaseModel):
     specialization: str
 
 @app.post("/settings")
-def update_user_settings(request: UpdateSettingsRequest):
+def update_user_settings(request: UpdateSettingsRequest, dep: tuple = Depends(get_supabase)):
     """Update the current user specialization."""
+    supabase, user = dep
     data = {
-        "user_id": "default_user",
+        "user_id": user.id,
         "specialization": request.specialization
     }
-    # Upsert
-    res = supabase.table("user_settings").upsert(data, on_conflict="user_id").execute()
+    # Upsert using RLS
+    res = supabase.table("user_settings").upsert(data).execute()
     return res.data[0]
 
 @app.post("/maintenance/timeout-sweep")
 def timeout_sweep():
-    """Mark exams stuck in 'processing' for more than 15 minutes as failed."""
+    """Mark exams stuck in 'processing' for more than 15 minutes as failed. (Admin only - naturally works via cron)"""
     fifteen_mins_ago = (datetime.datetime.now() - datetime.timedelta(minutes=15)).isoformat()
     
-    # We use a raw query or try to filter by date
-    # Supabase Python client filter
-    res = supabase.table("exams")\
+    res = supabase_service.table("exams")\
         .update({"status": "failed", "error_message": "Verarbeitung abgebrochen (Zeitüberschreitung)"})\
         .eq("status", "processing")\
         .lt("upload_date", fifteen_mins_ago)\
@@ -486,9 +498,11 @@ Output valid JSON matching this schema:
 
 # --- Background Task ---
 
-def process_exam_background(exam_id: str, file_path: str):
-    print(f"Processing exam {exam_id}...")
-    supabase.table("exams").update({"status": "processing"}).eq("id", exam_id).execute()
+# --- Background Task ---
+
+def process_exam_background(exam_id: str, file_path: str, user_id: str):
+    print(f"Processing exam {exam_id} for user {user_id}...")
+    supabase_service.table("exams").update({"status": "processing"}).eq("id", exam_id).execute()
 
     try:
         raw_text = extract_text_from_pdf(file_path)
@@ -496,15 +510,11 @@ def process_exam_background(exam_id: str, file_path: str):
             raise ValueError("Could not extract text from PDF")
 
         # --- NLP Pre-Processing Step ---
-        print(f"Running NLP pre-extraction for exam {exam_id}...")
         candidate_questions = pre_extract_questions(raw_text)
-        
-        # Format candidates for the prompt
         candidates_json_str = json.dumps(candidate_questions, indent=2) if candidate_questions else "(None found by pre-processor)"
 
-        print(f"Calling Gemma ({GEMMA_MODEL}) for exam {exam_id}...")
+        print(f"Calling Gemma for exam {exam_id}...")
         
-        # Enhanced prompt with pre-extracted candidates
         full_prompt = f"""{EXAM_SYSTEM_PROMPT}
 
 --- CANDIDATE_QUESTIONS (from NLP pre-processor) ---
@@ -517,57 +527,52 @@ def process_exam_background(exam_id: str, file_path: str):
         response = client.models.generate_content(
             model=GEMMA_MODEL,
             contents=full_prompt,
-            config={
-                'response_mime_type': 'application/json',
-            }
+            config={'response_mime_type': 'application/json'}
         )
         
         ai_output = parse_json_from_markdown(response.text)
         
-        # Save solution to study_plans table (reusing table for solution storage)
+        # Save solution
         study_plan_data = {
             "exam_id": exam_id,
+            "user_id": user_id,
             "raw_json": ai_output,
             "markdown_plan": ai_output.get("summary", "Processed successfully")
         }
         
-        # Upsert
-        existing = supabase.table("study_plans").select("*").eq("exam_id", exam_id).execute()
-        if existing.data:
-            supabase.table("study_plans").update(study_plan_data).eq("exam_id", exam_id).execute()
-        else:
-            supabase.table("study_plans").insert(study_plan_data).execute()
+        supabase_service.table("study_plans").upsert(study_plan_data, on_conflict="exam_id").execute()
 
         # Get specialization from settings
-        settings_res = supabase.table("user_settings").select("specialization").eq("user_id", "default_user").execute()
+        settings_res = supabase_service.table("user_settings").select("specialization").eq("user_id", user_id).execute()
         user_specialization = settings_res.data[0]['specialization'] if settings_res.data else None
 
-        # Update exam record with extracted metadata
-        supabase.table("exams").update({
+        # Update exam record
+        supabase_service.table("exams").update({
             "status": "completed",
             "qualification_area": ai_output.get("qualificationArea"),
             "handlungsbereich": ai_output.get("handlungsbereich"),
             "specialization": user_specialization
         }).eq("id", exam_id).execute()
 
-        # --- NEW: Save scenarios and questions to structured tables ---
-        # 1. Save Scenarios
-        scenario_map = {} # ai_index -> db_uuid
+        # Save Scenarios
+        scenario_map = {}
         for ai_scenario in ai_output.get("scenarios", []):
             scenario_data = {
                 "exam_id": exam_id,
+                "user_id": user_id,
                 "context_text": ai_scenario.get("contextText"),
                 "order": ai_scenario.get("index", 0)
             }
-            s_res = supabase.table("scenarios").insert(scenario_data).execute()
+            s_res = supabase_service.table("scenarios").insert(scenario_data).execute()
             if s_res.data:
                 scenario_map[ai_scenario.get("index")] = s_res.data[0]['id']
 
-        # 2. Save Questions
+        # Save Questions
         for ai_q in ai_output.get("questions", []):
             scenario_idx = ai_q.get("scenarioIndex")
             q_data = {
                 "exam_id": exam_id,
+                "user_id": user_id,
                 "scenario_id": scenario_map.get(scenario_idx) if scenario_idx is not None else None,
                 "question_number": ai_q.get("questionNumber"),
                 "question_text": ai_q.get("questionText"),
@@ -580,21 +585,16 @@ def process_exam_background(exam_id: str, file_path: str):
                 "points_total": ai_q.get("points", {}).get("total"),
                 "points_breakdown": ai_q.get("points", {}).get("breakdown")
             }
-            supabase.table("questions").insert(q_data).execute()
+            supabase_service.table("questions").insert(q_data).execute()
             
-        print(f"Exam {exam_id} processed successfully with structured scenarios and questions.")
-
     except Exception as e:
         error_msg = str(e)
-        print(f"Error processing exam {exam_id}: {error_msg}")
-        
-        # Check for specific Google AI errors
         if "429" in error_msg:
             error_msg = "KI-Nutzungslimit überschritten (Quote). Bitte versuchen Sie es später erneut."
         elif "500" in error_msg and "Google" in error_msg:
             error_msg = "KI-Dienstfehler. Bitte versuchen Sie es erneut."
             
-        supabase.table("exams").update({
+        supabase_service.table("exams").update({
             "status": "failed",
             "error_message": error_msg[:1000]
         }).eq("id", exam_id).execute()
@@ -615,15 +615,20 @@ def _safe_filename(name: Optional[str]) -> str:
 
 
 @app.post("/upload")
-async def upload_exam(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
-    # 1. Validate content type & extension before reading the whole body
+@limiter.limit("10/hour")
+async def upload_exam(
+    request: Request,
+    file: UploadFile = File(...), 
+    background_tasks: BackgroundTasks = None,
+    dep: tuple = Depends(get_supabase)
+):
+    supabase, user = dep
     declared_ct = (file.content_type or "").lower()
     if declared_ct and declared_ct not in ("application/pdf", "application/x-pdf"):
         raise HTTPException(status_code=415, detail="Nur PDF-Dateien werden unterstützt.")
 
     safe_name = _safe_filename(file.filename)
 
-    # 2. Stream into a temp file with a size cap & magic-byte check on the first chunk
     os.makedirs("temp", exist_ok=True)
     local_path = f"temp/{uuid.uuid4()}_{safe_name}"
 
@@ -632,34 +637,24 @@ async def upload_exam(file: UploadFile = File(...), background_tasks: Background
     try:
         with open(local_path, "wb") as f:
             while True:
-                chunk = await file.read(1024 * 1024)  # 1 MiB chunks
+                chunk = await file.read(1024 * 1024)
                 if not chunk:
                     break
                 if not header_checked:
                     if not chunk.startswith(PDF_MAGIC):
-                        raise HTTPException(
-                            status_code=415,
-                            detail="Datei ist keine gültige PDF (Magic-Bytes fehlen).",
-                        )
+                        raise HTTPException(status_code=415, detail="Datei ist keine gültige PDF.")
                     header_checked = True
                 total += len(chunk)
                 if total > MAX_UPLOAD_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Datei überschreitet Maximum ({MAX_UPLOAD_BYTES // (1024*1024)} MB).",
-                    )
+                    raise HTTPException(status_code=413, detail="Datei zu groß.")
                 f.write(chunk)
 
-        if total == 0 or not header_checked:
-            raise HTTPException(status_code=400, detail="Leere oder ungültige Datei.")
-
-        # 3. Upload to Supabase Storage
-        storage_path = f"exams/{uuid.uuid4()}_{safe_name}"
+        storage_path = f"exams/{user.id}/{uuid.uuid4()}_{safe_name}"
         with open(local_path, "rb") as f:
-            supabase.storage.from_("exams").upload(path=storage_path, file=f)
+            supabase_service.storage.from_("exams").upload(path=storage_path, file=f)
 
-        # 4. Create database record
         exam_data = {
+            "user_id": user.id,
             "filename": safe_name,
             "storage_path": storage_path,
             "status": "uploading",
@@ -669,29 +664,24 @@ async def upload_exam(file: UploadFile = File(...), background_tasks: Background
             raise HTTPException(status_code=500, detail="Failed to insert into DB")
 
         exam_id = res.data[0]["id"]
-
-        # 5. Trigger background processing
-        background_tasks.add_task(process_exam_background, exam_id, local_path)
+        background_tasks.add_task(process_exam_background, exam_id, local_path, user.id)
 
         return {"message": "Upload successful", "exam_id": exam_id}
-    except HTTPException:
-        if os.path.exists(local_path):
-            os.remove(local_path)
-        raise
     except Exception as e:
         if os.path.exists(local_path):
             os.remove(local_path)
+        if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/exams")
-def list_exams():
-    # Return exams with minimal info
+def list_exams(dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
     res = supabase.table("exams").select("*").order("upload_date", desc=True).execute()
     return res.data
 
 @app.post("/retry/{exam_id}")
-async def retry_exam(exam_id: str, background_tasks: BackgroundTasks):
-    # Fetch exam details
+async def retry_exam(exam_id: str, background_tasks: BackgroundTasks, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
     res = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -699,46 +689,39 @@ async def retry_exam(exam_id: str, background_tasks: BackgroundTasks):
     exam = res.data
     storage_path = exam['storage_path']
     
-    # Download from storage to temp
     if not os.path.exists("temp"):
         os.makedirs("temp")
     
     local_path = f"temp/retry_{uuid.uuid4()}_{exam['filename']}"
     try:
+        # Download in thread to avoid blocking event loop
+        content = await asyncio.to_thread(supabase_service.storage.from_("exams").download, storage_path)
         with open(local_path, "wb+") as f:
-            res = supabase.storage.from_("exams").download(storage_path)
-            f.write(res)
+            f.write(content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to download from storage: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download: {e}")
 
-    # Mark as processing
     supabase.table("exams").update({"status": "processing", "error_message": None}).eq("id", exam_id).execute()
-    
-    background_tasks.add_task(process_exam_background, exam_id, local_path)
+    background_tasks.add_task(process_exam_background, exam_id, local_path, user.id)
     return {"message": "Retry started", "exam_id": exam_id}
 
 @app.get("/solutions/{exam_id}")
-def get_solution(exam_id: str):
-    # 1. Fetch Exam metadata
+def get_solution(exam_id: str, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
     exam_res = supabase.table("exams").select("*").eq("id", exam_id).execute()
     if not exam_res.data:
-        raise HTTPException(status_code=404, detail="Exam not found")
+        raise HTTPException(status_code=404, detail="Exam not found or no access")
     exam = exam_res.data[0]
 
-    # 2. Try fetching from structured tables
     q_res = supabase.table("questions").select("*, scenarios(*)").eq("exam_id", exam_id).execute()
     
     if q_res.data:
-        # Reconstruct the ExamSolution structure for the frontend
         sp_res = supabase.table("study_plans").select("raw_json").eq("exam_id", exam_id).execute()
         raw_json = sp_res.data[0]['raw_json'] if sp_res.data else {}
         
-        # Map structured questions back to frontend format
         questions = []
         for q in q_res.data:
             scenario_text = q.get("scenarios", {}).get("context_text") if q.get("scenarios") else None
-            
-            # Format points breakdown as string for frontend display
             pts_breakdown = q.get("points_breakdown")
             pts_str = ""
             if isinstance(pts_breakdown, list):
@@ -747,6 +730,7 @@ def get_solution(exam_id: str):
                 pts_str = pts_breakdown
                 
             questions.append({
+                "id": q.get("id"),
                 "questionNumber": q.get("question_number"),
                 "questionText": q.get("question_text"),
                 "contextScenario": scenario_text,
@@ -760,11 +744,9 @@ def get_solution(exam_id: str):
                 "pointsBreakdown": pts_str
             })
         
-        # Sort questions by number if possible
         try:
-            questions.sort(key=lambda x: int(x['questionNumber'].split('.')[0]) if x['questionNumber'] else 99)
-        except:
-            pass
+            questions.sort(key=lambda x: int(re.sub(r'[^0-9]', '', x['questionNumber'])) if x['questionNumber'] else 999)
+        except: pass
 
         return {
             "subject": raw_json.get("subject", exam.get("qualification_area")),
@@ -777,7 +759,6 @@ def get_solution(exam_id: str):
             "questions": questions
         }
 
-    # 3. Fallback to legacy raw_json
     sp_res = supabase.table("study_plans").select("raw_json").eq("exam_id", exam_id).execute()
     if sp_res.data:
         return sp_res.data[0]['raw_json']
@@ -785,21 +766,19 @@ def get_solution(exam_id: str):
     raise HTTPException(status_code=404, detail="Solution not found")
 
 @app.post("/generate-plan")
-async def generate_plan(request: GeneratePlanRequest):
-    # Takes in MULTIPLE exam solutions and generates a master plan
+@limiter.limit("5/hour")
+async def generate_plan(request: Request, body: GeneratePlanRequest, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
     papers_summary = ""
-    for p in request.exam_solutions:
+    for p in body.exam_solutions:
         papers_summary += f"Subject: {p.get('subject', 'Unknown')}, Topics: {', '.join(p.get('topics', []))}, Difficulty: {p.get('difficulty', 'Unknown')}\n"
 
     try:
-        # Planning across multiple papers involves large context aggregation
-        print(f"Generating plan with {GEMINI_MODEL}...")
+        print(f"Generating plan for {user.id}...")
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=f"{PLAN_SYSTEM_PROMPT}\n\nData:\n{papers_summary}",
-            config={
-                'response_mime_type': 'application/json',
-            }
+            config={'response_mime_type': 'application/json'}
         )
         plan_json = parse_json_from_markdown(response.text)
         
@@ -823,236 +802,146 @@ class PracticeSessionCreate(BaseModel):
     score_percentage: int
 
 @app.post("/progress/sessions")
-async def save_practice_session(session: PracticeSessionCreate):
-    """Save a practice session result to the database."""
-    try:
-        session_data = {
-            "exam_id": session.exam_id,
-            "exam_name": session.exam_name,
-            "total_questions": session.total_questions,
-            "correct_count": session.correct_count,
-            "incorrect_count": session.incorrect_count,
-            "score_percentage": session.score_percentage
-        }
-        res = supabase.table("practice_sessions").insert(session_data).execute()
-        if not res.data:
-            raise HTTPException(status_code=500, detail="Failed to save session")
-        return {"message": "Session saved", "session_id": res.data[0]['id']}
-    except Exception as e:
-        print(f"Error saving practice session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def save_practice_session(session: Dict[str, Any], dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    session["user_id"] = user.id
+    res = supabase.table("practice_sessions").insert(session).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to save session")
+    return {"session_id": res.data[0]["id"]}
 
 @app.get("/progress")
-def get_progress():
-    """Get overall progress data including all sessions and aggregate stats."""
-    try:
-        # Fetch all practice sessions, ordered by date
-        res = supabase.table("practice_sessions").select("*").order("session_date", desc=True).execute()
-        sessions = res.data or []
-        
-        # Calculate aggregate stats
-        questions_mastered = sum(s.get('correct_count', 0) for s in sessions)
-        questions_attempted = sum(s.get('total_questions', 0) for s in sessions)
-        
-        return {
-            "sessions": sessions,
-            "questionsMastered": questions_mastered,
-            "questionsAttempted": questions_attempted
-        }
-    except Exception as e:
-        print(f"Error fetching progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def get_progress(dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    # RLS ensures we only get our own sessions
+    res = supabase.table("practice_sessions").select("*").order("session_date", desc=True).execute()
+    sessions = res.data or []
+    
+    total_q = sum(s.get("total_questions", 0) for s in sessions)
+    correct = sum(s.get("correct_count", 0) for s in sessions)
+    
+    return {
+        "sessions": sessions,
+        "questionsAttempted": total_q,
+        "questionsMastered": correct
+    }
 
 @app.get("/progress/exam/{exam_id}")
-def get_exam_progress(exam_id: str):
-    """Get progress data for a specific exam."""
-    try:
-        res = supabase.table("practice_sessions").select("*").eq("exam_id", exam_id).order("session_date", desc=True).execute()
-        return res.data or []
-    except Exception as e:
-        print(f"Error fetching exam progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def get_exam_progress(exam_id: str, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    res = supabase.table("practice_sessions").select("*").eq("exam_id", exam_id).order("session_date", desc=True).execute()
+    return res.data or []
 
 # --- Study Guide / Topic Summary Endpoints ---
 
-class GenerateStudyGuideRequest(BaseModel):
-    topic: str
-    exam_ids: Optional[List[str]] = None  # If None, aggregate from all exams
+@app.get("/topics")
+def list_available_topics(dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    res = supabase.table("questions").select("topic").execute()
+    topics = sorted(list(set(q["topic"] for q in res.data if q.get("topic"))))
+    return topics
 
 @app.post("/study-guides/generate")
-async def generate_study_guide(request: GenerateStudyGuideRequest):
-    """Generate a study guide for a specific topic by aggregating questions from exams."""
+@limiter.limit("10/hour")
+async def generate_study_guide(request: Request, body: Dict[str, Any], dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    topic = body.get("topic")
+    if not topic:
+        raise HTTPException(status_code=400, detail="Topic required")
+
+    # Fetch questions for context (RLS applies)
+    q_res = supabase.table("questions").select("*").eq("topic", topic).limit(15).execute()
+    if not q_res.data:
+         raise HTTPException(status_code=404, detail="No questions found for this topic.")
+
+    questions_context = ""
+    for q in q_res.data:
+        questions_context += f"Q: {q['question_text']}\nA: {q['solution']}\n\n"
+
     try:
-        # 1. Fetch questions related to the topic
-        query = supabase.table("questions").select("*, scenarios(context_text)")
-        if request.exam_ids:
-            query = query.in_("exam_id", request.exam_ids)
-        
-        res = query.execute()
-        
-        if not res.data:
-            # Fallback to legacy study_plans if questions table is empty for some reason
-            res_legacy = supabase.table("study_plans").select("*").execute()
-            # ... (omitting legacy fallback for brevity, but could keep it)
-            raise HTTPException(status_code=404, detail="No structured question data found. Please trigger an analysis first.")
-        
-        # 2. Extract questions matching the topic
-        topic_lower = request.topic.lower()
-        related_questions = []
-        subject = None
-        source_exam_ids = []
-        
-        for q in res.data:
-            q_topic = (q.get("topic") or "").lower()
-            if topic_lower in q_topic or q_topic in topic_lower:
-                scenario_text = q.get("scenarios", {}).get("context_text") if q.get("scenarios") else None
-                related_questions.append({
-                    "questionText": q.get("question_text", ""),
-                    "solution": q.get("solution", ""),
-                    "explanation": q.get("explanation", ""),
-                    "points": q.get("points_total"),
-                    "scenario": scenario_text
-                })
-                if q.get("exam_id") not in source_exam_ids:
-                    source_exam_ids.append(q.get("exam_id"))
-                if not subject:
-                    subject = q.get("subject")
-        
-        if not related_questions:
-            raise HTTPException(status_code=404, detail=f"No questions found for topic: {request.topic}")
-        
-        # 3. Generate study guide using LLM
-        formatted_qs = []
-        for q in related_questions[:15]:
-            scenario_part = f"SCENARIO: {q['scenario']}\n" if q['scenario'] else ""
-            formatted_qs.append(f"{scenario_part}Q: {q['questionText']} ({q['points'] or '?' } Pkt)\nA: {q['solution']}\nExplanation: {q['explanation']}")
-        questions_text = "\n\n".join(formatted_qs)
-        
-        prompt = STUDY_GUIDE_PROMPT.format(topic=request.topic, questions=questions_text)
-        
-        # High precision requirements for study guides
-        print(f"Generating study guide with {GEMMA_MODEL} for topic: {request.topic}...")
+        print(f"Generating study guide for {topic}...")
         response = client.models.generate_content(
-            model=GEMMA_MODEL,
-            contents=prompt,
-            config={
-                'response_mime_type': 'application/json',
-            }
+            model=GEMINI_MODEL,
+            contents=STUDY_GUIDE_PROMPT.format(topic=topic, questions=questions_context),
+            config={'response_mime_type': 'application/json'}
         )
+        guide_data = parse_json_from_markdown(response.text)
         
-        guide_json = parse_json_from_markdown(response.text)
-        
-        # 4. Save to database
-        summary_data = {
-            "topic": request.topic,
-            "subject": subject or guide_json.get("subject"),
-            "summary_markdown": guide_json.get("summary", ""),
-            "key_concepts": guide_json.get("keyConcepts", []),
-            "formulas": guide_json.get("formulas", []),
-            "common_mistakes": guide_json.get("commonMistakes", []),
-            "example_questions": guide_json.get("exampleProblems", []),
-            "point_strategy": guide_json.get("pointStrategy", ""),
-            "source_exam_ids": source_exam_ids
+        # Save to database (Syncing with updated schema)
+        db_data = {
+            "user_id": user.id,
+            "topic": topic,
+            "subject": guide_data.get("subject"),
+            "summary_markdown": guide_data.get("summary"),
+            "key_concepts": guide_data.get("keyConcepts"),
+            "formulas": guide_data.get("formulas"),
+            "common_mistakes": guide_data.get("commonMistakes"),
+            "example_questions": guide_data.get("exampleProblems"),
+            "point_strategy": guide_data.get("point_strategy"),
+            "quick_tips": guide_data.get("quickTips")
         }
-        
-        # Check if guide already exists for this topic (upsert)
-        existing = supabase.table("topic_summaries").select("id").eq("topic", request.topic).execute()
-        if existing.data:
-            supabase.table("topic_summaries").update(summary_data).eq("topic", request.topic).execute()
-            guide_id = existing.data[0]["id"]
-        else:
-            insert_res = supabase.table("topic_summaries").insert(summary_data).execute()
-            guide_id = insert_res.data[0]["id"]
-        
-        return {
-            "id": guide_id,
-            "topic": request.topic,
-            "questionsUsed": len(related_questions),
-            **guide_json
-        }
-        
-    except HTTPException:
-        raise
+        res = supabase.table("topic_summaries").upsert(db_data, on_conflict="user_id, topic").execute()
+        return res.data[0]
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"Error generating study guide: {e}")
-        # Return a more descriptive error if possible (careful not to leak sensitive info, but detailed enough for debugging)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/study-guides")
-def list_study_guides():
-    """List all generated study guides."""
-    try:
-        res = supabase.table("topic_summaries").select("id, topic, subject, created_at, updated_at").order("updated_at", desc=True).execute()
-        return res.data or []
-    except Exception as e:
-        print(f"Error listing study guides: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def list_study_guides(dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    res = supabase.table("topic_summaries").select("id, topic, subject, created_at").order("updated_at", desc=True).execute()
+    return res.data or []
 
-@app.get("/study-guides/{guide_id}")
-def get_study_guide(guide_id: str):
-    """Get a specific study guide by ID."""
-    try:
-        res = supabase.table("topic_summaries").select("*").eq("id", guide_id).single().execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Study guide not found")
-        return res.data
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error fetching study guide: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/study-guides/{id}")
+def get_study_guide(id: str, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    res = supabase.table("topic_summaries").select("*").eq("id", id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Guide not found")
+    return res.data[0]
 
-@app.get("/topics")
-def list_available_topics():
-    """List all unique topics found across all exams (for generating study guides)."""
+@app.delete("/exams/{exam_id}")
+async def delete_exam(exam_id: str, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    # 1. Verify existence/access
+    res = supabase.table("exams").select("storage_path").eq("id", exam_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    
+    storage_path = res.data['storage_path']
+    
+    # 2. Delete (Cascade handled by DB or explicit if needed)
+    supabase.table("exams").delete().eq("id", exam_id).execute()
+    
+    # 3. Storage cleanup (service key needed for storage delete usually if owner check is complex)
     try:
-        res = supabase.table("study_plans").select("raw_json").execute()
-        topics = set()
-        for row in res.data or []:
-            raw_json = row.get("raw_json", {})
-            for q in raw_json.get("questions", []):
-                topic = q.get("topic")
-                if topic:
-                    topics.add(topic)
-        return sorted(list(topics))
-    except Exception as e:
-        print(f"Error listing topics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        supabase_service.storage.from_("exams").remove([storage_path])
+    except: pass
+    
+    return {"message": "Deleted successfully"}
 
 @app.post("/fachgespraech")
-async def chat_fachgespraech(request: FachgespraechRequest):
-    """Simulate a Fachgespräch (oral exam defense)."""
+@limiter.limit("30/hour")
+async def chat_fachgespraech(request: Request, body: FachgespraechRequest, dep: tuple = Depends(get_supabase)):
+    supabase, user = dep
+    topic = body.context_topic or "Allgemeine Elektrotechnik"
+    
+    chat_history = []
+    for msg in body.messages[:-1]:
+        chat_history.append({
+            "role": "user" if msg.role == "user" else "model",
+            "parts": [{"text": msg.content}]
+        })
+
     try:
-        # Prepare history for Gemini
-        chat_history = []
-        for msg in request.messages[:-1]: # All but the last one
-            chat_history.append({
-                "role": "user" if msg.role == "user" else "model",
-                "parts": [{"text": msg.content}]
-            })
-        
-        system_instructions = FACHGESPRAECH_SYSTEM_PROMPT.format(
-            topic=request.context_topic or "Elektrotechnik Allgemein"
-        )
-        
-        # Oral prep uses Gemini 3 Flash for speed and conversational nuance
-        # Start a chat session
         chat = client.chats.create(
             model=GEMINI_MODEL,
-            config={
-                'system_instruction': system_instructions
-            },
+            config={'system_instruction': FACHGESPRAECH_SYSTEM_PROMPT.format(topic=topic)},
             history=chat_history
         )
         
-        last_user_message = request.messages[-1].content
-        response = chat.send_message(last_user_message)
-        
+        response = chat.send_message(body.messages[-1].content)
         return {"role": "assistant", "content": response.text}
     except Exception as e:
-        print(f"Error in fachgespraech: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

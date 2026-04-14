@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { ExamPaper, QuestionAnalysis, Specialization } from '../types';
 import {
@@ -6,6 +8,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { savePracticeSession as saveToAPI, getProgress as fetchProgressFromAPI, ProgressData, PracticeSessionFromAPI } from '../lib/api';
+import { useToast } from './Toast';
 
 interface ExamViewerProps {
     paper: ExamPaper;
@@ -39,6 +42,7 @@ export const loadProgress = async (): Promise<ProgressData> => {
 };
 
 const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization }) => {
+    const { toast } = useToast();
     const [mode, setMode] = useState<Mode>('review');
     const [practiceStats, setPracticeStats] = useState<Record<number, QuestionStatus>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -130,7 +134,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
             spread: 100,
             origin: { y: 0.6 }
         });
-        alert(`Zeit abgelaufen oder Prüfung abgegeben! Sie haben ${scorePercentage}% erreicht.`);
+        toast(`Prüfung abgeschlossen! Sie haben ${scorePercentage}% erreicht.`, "success");
     };
 
     const handleAnswer = (status: QuestionStatus) => {

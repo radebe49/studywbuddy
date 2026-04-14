@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useState } from 'react';
 import { ExamPaper, ViewState } from '../types';
-import { FileText, Loader2, CheckCircle, AlertCircle, Plus, LayoutDashboard, Calendar, X, Search, ChevronDown, ChevronRight, GraduationCap, Briefcase, BookOpen, Settings as SettingsIcon, MessageSquare } from 'lucide-react';
+import { FileText, Loader2, CheckCircle, AlertCircle, Plus, LayoutDashboard, Calendar, X, Search, ChevronDown, ChevronRight, GraduationCap, Briefcase, BookOpen, Settings as SettingsIcon, MessageSquare, LogOut } from 'lucide-react';
 
 interface SidebarProps {
     papers: ExamPaper[];
@@ -11,6 +13,8 @@ interface SidebarProps {
     onImportClick: () => void;
     isOpen: boolean;
     onClose: () => void;
+    userEmail?: string;
+    onSignOut: () => void;
 }
 
 // Helper to detect qualification area from subject/solution
@@ -42,7 +46,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     selectedPaperId,
     onImportClick,
     isOpen,
-    onClose
+    onClose,
+    userEmail,
+    onSignOut
 }) => {
 
     // --- State for Search ---
@@ -257,8 +263,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {!groupByQualification && <div className="space-y-1">{filteredPapers.map(paper => renderPaperButton(paper))}</div>}
                 </div>
 
-                <div className="p-6 md:px-8 bg-transparent">
-                    <p className="text-[10px] font-medium tracking-widest text-gray-300 uppercase">v2.0 • Pro Max</p>
+                <div className="p-6 md:px-8 border-t border-gray-100 bg-white space-y-4">
+                    {userEmail && (
+                        <div className="flex flex-col gap-1">
+                            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Angemeldet als</p>
+                            <p className="text-xs text-gray-600 truncate font-medium">{userEmail}</p>
+                        </div>
+                    )}
+                    <button 
+                        onClick={onSignOut}
+                        className="w-full py-2.5 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2 active:scale-95"
+                    >
+                        <LogOut size={14} /> Abmelden
+                    </button>
+                    <div className="pt-2">
+                        <p className="text-[10px] font-medium tracking-widest text-gray-300 uppercase">v2.1 • Multi-User Secure</p>
+                    </div>
                 </div>
             </div>
         </>

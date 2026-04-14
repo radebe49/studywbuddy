@@ -1,0 +1,10 @@
+{
+  "name": "ai-agent-extract",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "dependencies": {
+    "@testsprite/testsprite-mcp": "^0.0.37"
+  }
+}

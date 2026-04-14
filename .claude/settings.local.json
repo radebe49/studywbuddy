@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(python3 -m py_compile main.py)"
+    ]
+  }
+}

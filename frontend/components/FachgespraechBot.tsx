@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, User, Bot, Loader2, RefreshCw, GraduationCap, ArrowLeft, MessageSquare, AlertCircle } from 'lucide-react';
 import { ChatMessage, chatFachgespraech, listAvailableTopics } from '../lib/api';

@@ -40,6 +40,7 @@ export interface QuestionAnalysis {
     qualificationArea?: QualificationArea;
     subject?: string;
     topic: string;
+    type?: "Multiple Choice" | "True/False" | "Short Answer" | "Essay" | "Calculation";
     points?: number; // Estimated IHK points
     pointsBreakdown?: string; // Breakdown of point allocation
 }
@@ -55,7 +56,7 @@ export interface StudyPlanDay {
 export interface StudyPlan {
     id: string;
     title: string;
-    generatedAt: Date;
+    generatedAt: string;
     schedule: StudyPlanDay[];
     overview: string;
     // Backend returns "markdown_plan" too, but we parse "raw_json" into this structure

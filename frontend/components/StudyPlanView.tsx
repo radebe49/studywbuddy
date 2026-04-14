@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { StudyPlan } from '../types';
 import { Calendar, Clock, CheckSquare, Target, Download, Sparkles, AlertCircle } from 'lucide-react';

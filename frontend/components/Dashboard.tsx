@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo, useEffect, useState } from 'react';
 import { ExamPaper, StudyPlan, Specialization } from '../types';
 import FileUpload from './FileUpload';
@@ -18,7 +20,8 @@ import {
     BarChart3,
     Flame,
     AlertCircle,
-    RefreshCw
+    RefreshCw,
+    Trash2
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -27,6 +30,7 @@ interface DashboardProps {
     onFileUpload: (files: File[]) => void;
     onViewPaper: (paper: ExamPaper) => void;
     onRetryPaper: (paperId: string) => void;
+    onDeletePaper?: (id: string) => void;
     onGeneratePlan: () => void;
     onNavigateToPlan: () => void;
     specialization: Specialization;
@@ -39,6 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     onFileUpload,
     onViewPaper,
     onRetryPaper,
+    onDeletePaper,
     onGeneratePlan,
     onNavigateToPlan,
     specialization,
@@ -225,6 +230,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                                             ) : (
                                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                            )}
+                                            {onDeletePaper && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeletePaper(paper.id);
+                                                    }}
+                                                    className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                                    title="Löschen"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
                                             )}
                                         </div>
                                     </div>
