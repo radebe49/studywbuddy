@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ExamPaper, QuestionAnalysis } from '../types';
+import { ExamPaper, QuestionAnalysis, Specialization } from '../types';
 import {
     BookOpen, CheckCircle, BrainCircuit, BarChart3, Clock, ChevronLeft,
     Download, Printer, RefreshCw, XCircle, ChevronRight, Trophy, AlertCircle
@@ -10,6 +10,7 @@ import { savePracticeSession as saveToAPI, getProgress as fetchProgressFromAPI, 
 interface ExamViewerProps {
     paper: ExamPaper;
     onClose: () => void;
+    specialization: Specialization;
 }
 
 type Mode = 'review' | 'practice';
@@ -37,7 +38,7 @@ export const loadProgress = async (): Promise<ProgressData> => {
     }
 };
 
-const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
+const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization }) => {
     const [mode, setMode] = useState<Mode>('review');
     const [practiceStats, setPracticeStats] = useState<Record<number, QuestionStatus>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -48,7 +49,37 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
 
     if (!paper.solution) return null;
 
-    const questions = paper.solution.questions || [];
+    // --- Specialization Filtering ---
+    const filteredQuestions = useMemo(() => {
+        const allQuestions = paper.solution?.questions || [];
+        
+        // Only filter for HQ Technik
+        if (paper.solution?.qualificationArea === 'HQ' && paper.solution?.handlungsbereich === 'Technik') {
+            return allQuestions.filter(q => {
+                const topic = (q.topic || '').toLowerCase();
+                const text = (q.questionText || '').toLowerCase();
+                
+                // Heuristic filtering for legacy and new data
+                if (specialization === 'Infrastruktursysteme und Betriebstechnik') {
+                    // Hide questions clearly meant for AIT
+                    if (topic.includes('automatisierung') || text.includes('sps-programm') || text.includes('ait-spezifisch')) {
+                        return false;
+                    }
+                }
+                if (specialization === 'Automatisierungs- und Informationstechnik') {
+                    // Hide questions clearly meant for IBT
+                    if (topic.includes('infrastruktur') || text.includes('energieversorgung') || text.includes('obt-spezifisch')) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+        
+        return allQuestions;
+    }, [paper.solution?.questions, paper.solution?.qualificationArea, paper.solution?.handlungsbereich, specialization]);
+
+    const questions = filteredQuestions;
     const totalQuestions = questions.length;
 
     // --- Computed Stats ---
@@ -179,7 +210,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
                 <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                     {mode === 'review' ? (
                         <>
-                            <div className="flex items-center gap-3 mr-2 p-1 bg-gray-50 rounded-lg border border-gray-100">
+                            <div className="flex items-center gap-3 mr-2 p-1 bg-white rounded-lg border border-gray-100">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase ml-2">Time-Trial</span>
                                 <button
                                     onClick={() => setIsTimeTrial(!isTimeTrial)}
@@ -239,9 +270,9 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-hidden bg-gray-50 relative">
+            <div className="flex-1 overflow-hidden bg-white relative">
                 {mode === 'review' ? (
-                    <ReviewModeView paper={paper} />
+                    <ReviewModeView questions={questions} paper={paper} />
                 ) : (
                     <div className="h-full overflow-y-auto custom-scrollbar p-6 flex flex-col items-center">
                         <div className="w-full max-w-3xl">
@@ -273,31 +304,31 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose }) => {
 
 // --- Sub-components ---
 
-const ReviewModeView: React.FC<{ paper: ExamPaper }> = ({ paper }) => {
+const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper }> = ({ questions, paper }) => {
     return (
         <div className="h-full overflow-y-auto p-4 md:p-8 custom-scrollbar">
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-4xl mx-auto space-y-12">
                 {/* Summary Box */}
-                <div className="bg-white rounded-xl p-6 border border-indigo-50 shadow-sm">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-2 flex items-center gap-2">
-                        <BookOpen size={16} className="text-indigo-500" />
-                        Zusammenfassung
-                    </h3>
+                <div className="pb-8 border-b border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                            <BookOpen size={16} className="text-indigo-500" />
+                            Zusammenfassung
+                        </h3>
+                        {paper.solution?.questions?.length !== questions.length && (
+                            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">
+                                Gefiltert nach Schwerpunkt
+                            </span>
+                        )}
+                    </div>
                     <p className="text-gray-600 leading-relaxed text-sm">
                         {paper.solution?.summary}
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-                        {paper.solution?.topics?.map((topic, idx) => (
-                            <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                {topic}
-                            </span>
-                        ))}
                     </div>
-                </div>
 
                 {/* Questions List */}
                 <div className="space-y-6">
-                    {paper.solution?.questions?.map((q, idx) => (
+                    {questions.map((q, idx) => (
                         <QuestionCard key={idx} question={q} index={idx} />
                     ))}
                 </div>
@@ -314,7 +345,7 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
     const [showExplanation, setShowExplanation] = React.useState(false);
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden break-inside-avoid">
+        <div className="pb-10 border-b border-gray-100 break-inside-avoid last:border-0">
             <div className="p-5 border-b border-gray-50 flex gap-4">
                 <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 font-bold text-sm">
                     {question.questionNumber}
@@ -342,7 +373,7 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                 </div>
             </div>
 
-            <div className="bg-gray-50/30 p-5">
+            <div className="mt-4 pt-4">
                 <button
                     onClick={() => setShowExplanation(!showExplanation)}
                     className="text-indigo-600 text-sm font-semibold flex items-center gap-2 hover:text-indigo-700 transition-colors mb-4 focus:outline-none"
@@ -390,33 +421,33 @@ const PracticeCard: React.FC<{
 }> = ({ question, index, total, onResult, onNext, showResult, currentStatus, isTimeTrial }) => {
 
     return (
-        <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-white overflow-hidden animate-slide-up">
+        <div className="animate-slide-up max-w-4xl mx-auto">
             {/* Question Header */}
-            <div className="bg-indigo-600 p-6 text-white">
-                <div className="flex justify-between items-start opacity-90 mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-1 rounded">Frage {index + 1} von {total}</span>
-                    <div className="flex items-center gap-2">
+            <div className="pb-8 border-b border-gray-100">
+                <div className="flex justify-between items-start mb-6">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Frage {index + 1} von {total}</span>
+                    <div className="flex items-center gap-3">
                         {question.points && (
-                            <span className="text-xs font-bold bg-amber-400/30 px-2 py-1 rounded flex items-center gap-1 border border-amber-300/30">
-                                <Trophy size={12} /> {question.points} Pkt
+                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1">
+                                <Trophy size={10} /> {question.points} Pkt
                             </span>
                         )}
-                        <span className="text-xs font-medium text-indigo-100">{question.topic}</span>
+                        <span className="text-xs font-medium text-gray-500">{question.topic}</span>
                     </div>
                 </div>
                 {question.contextScenario && (
-                    <div className="mb-4 p-4 bg-indigo-900/30 border-l-4 border-indigo-300 rounded-r text-sm text-indigo-50 italic leading-relaxed backdrop-blur-sm">
-                        <span className="font-bold not-italic block mb-1 text-indigo-200">Situationsbeschreibung:</span>
+                    <div className="mb-6 p-4 bg-blue-50/50 border-l-4 border-blue-400 rounded-r text-sm text-blue-900 italic leading-relaxed">
+                        <span className="font-bold not-italic block mb-1">Situationsbeschreibung:</span>
                         {question.contextScenario}
                     </div>
                 )}
-                <h3 className="text-xl md:text-2xl font-bold leading-snug">
+                <h3 className="text-xl md:text-2xl font-bold text-gray-900 leading-snug">
                     {question.questionText}
                 </h3>
             </div>
 
             {/* Answer Interaction Area */}
-            <div className="p-6 md:p-8">
+            <div className="pt-8 pb-12">
                 {!showResult ? (
                     <div className="space-y-6">
                         <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-500">

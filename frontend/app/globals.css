@@ -11,7 +11,7 @@
 
 body {
     font-family: var(--font-sans);
-    background-color: #f9fafb;
+    background-color: white;
     color: #1f2937;
 }
 
@@ -34,12 +34,6 @@ body {
     background: #94a3b8;
 }
 
-.glass-panel {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-}
 
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

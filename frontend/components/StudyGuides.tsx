@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StudyGuide, listAvailableTopics, listStudyGuides, generateStudyGuide, getStudyGuide, IHK_TAXONOMY } from '../lib/api';
 import { Specialization } from '../types';
-import { BookOpen, Sparkles, ChevronRight, ChevronDown, FileText, AlertCircle, Loader2, ArrowLeft, Bookmark, Zap, CheckCircle2, GraduationCap, Briefcase } from 'lucide-react';
+import { BookOpen, Sparkles, ChevronRight, ChevronDown, FileText, AlertCircle, Loader2, ArrowLeft, Bookmark, Zap, CheckCircle2, GraduationCap, Briefcase, Trophy, BrainCircuit } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 // Helper to categorize a topic/subject into the IHK taxonomy
@@ -173,20 +173,20 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
         <div
             key={guide.id}
             onClick={() => guide.id && handleViewGuide(guide.id)}
-            className="bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer group"
+            className="group flex flex-col justify-between py-4 px-1 border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer transition-colors"
         >
-            <div className="flex justify-between items-start mb-3">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                    <FileText size={18} />
-                </div>
-                <span className="text-xs text-gray-400 font-medium">
+            <div>
+                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-widest block mb-1">
                     {new Date(guide.created_at || '').toLocaleDateString('de-DE')}
                 </span>
+                <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors text-sm">
+                    {guide.topic}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">{guide.subject}</p>
             </div>
-            <h3 className="font-bold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors text-sm">
-                {guide.topic}
-            </h3>
-            <p className="text-xs text-gray-500">{guide.subject}</p>
+            <div className="mt-4 flex items-center text-xs font-medium text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                Leitfaden öffnen <ChevronRight size={14} className="ml-1" />
+            </div>
         </div>
     );
 
@@ -228,7 +228,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                 <FileText className="text-indigo-600" />
                                 Überblick
                             </h2>
-                            <div className="prose prose-indigo max-w-none text-gray-600 bg-gray-50 p-6 rounded-xl border border-gray-100">
+                            <div className="prose prose-indigo max-w-none text-gray-600 bg-white p-6 rounded-xl border border-gray-100">
                                 <ReactMarkdown>{selectedGuide.summary_markdown}</ReactMarkdown>
                             </div>
                         </section>
@@ -274,22 +274,41 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                             </section>
                         )}
 
-                        {/* Common Mistakes */}
-                        {selectedGuide.common_mistakes.length > 0 && (
+                        {/* Point Strategy */}
+                        {selectedGuide.point_strategy && (
+                            <section className="bg-indigo-900 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <Trophy size={80} />
+                                </div>
+                                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                    <Trophy className="text-amber-400" />
+                                    IHK Punkte-Strategie
+                                </h2>
+                                <div className="prose prose-invert max-w-none text-indigo-100 text-sm leading-relaxed">
+                                    <ReactMarkdown>{selectedGuide.point_strategy}</ReactMarkdown>
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Example Questions */}
+                        {selectedGuide.example_questions.length > 0 && (
                             <section>
                                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <AlertCircle className="text-red-500" />
-                                    Häufige Fehler
+                                    <BrainCircuit className="text-purple-500" />
+                                    Beispielaufgaben
                                 </h2>
-                                <div className="space-y-3">
-                                    {selectedGuide.common_mistakes.map((m, i) => (
-                                        <div key={i} className="p-4 bg-red-50 border border-red-100 rounded-lg flex gap-4">
-                                            <div className="shrink-0 text-red-500 mt-1">
-                                                <AlertCircle size={20} />
+                                <div className="space-y-4">
+                                    {selectedGuide.example_questions.map((ex, i) => (
+                                        <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                            <div className="p-5 border-b border-gray-100 bg-white">
+                                                <h3 className="font-bold text-gray-900 mb-2">Aufgabe {i + 1}</h3>
+                                                <p className="text-gray-700">{ex.problem}</p>
                                             </div>
-                                            <div>
-                                                <p className="font-medium text-red-800 mb-1">Fehler: {m.mistake}</p>
-                                                <p className="text-red-600 text-sm">Korrektur: {m.correction}</p>
+                                            <div className="p-5">
+                                                <div className="text-xs font-bold text-green-700 uppercase mb-2">Musterlösung</div>
+                                                <div className="prose prose-sm max-w-none text-gray-600">
+                                                    <ReactMarkdown>{ex.solution}</ReactMarkdown>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -327,24 +346,19 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
 
                     {/* BQ Section */}
                     {groupedGuides.BQ.length > 0 && (
-                        <div className="bg-blue-50/50 rounded-xl border border-blue-100 overflow-hidden">
+                        <div className="mb-8">
                             <button
                                 onClick={() => toggleSection('BQ')}
-                                className="w-full flex items-center justify-between p-4 hover:bg-blue-50 transition-colors"
+                                className="w-full flex items-center justify-between py-2 mb-4 border-b border-gray-900 group"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                                        <GraduationCap size={20} />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="font-bold text-gray-900">Basisqualifikationen (BQ)</h3>
-                                        <p className="text-xs text-gray-500">{groupedGuides.BQ.length} Leitfäden</p>
-                                    </div>
+                                <div className="text-left">
+                                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Basisqualifikationen (BQ)</h3>
+                                    <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">{groupedGuides.BQ.length} Leitfäden</p>
                                 </div>
-                                {expandedSections.BQ ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                {expandedSections.BQ ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </button>
                             {expandedSections.BQ && (
-                                <div className="p-4 pt-0 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8">
                                     {groupedGuides.BQ.map(renderGuideCard)}
                                 </div>
                             )}
@@ -355,38 +369,33 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                     {(groupedGuides.HQ.Technik.length > 0 ||
                         groupedGuides.HQ.Organisation.length > 0 ||
                         groupedGuides.HQ['Führung und Personal'].length > 0) && (
-                            <div className="bg-amber-50/50 rounded-xl border border-amber-100 overflow-hidden">
+                            <div className="mb-8">
                                 <button
                                     onClick={() => toggleSection('HQ')}
-                                    className="w-full flex items-center justify-between p-4 hover:bg-amber-50 transition-colors"
+                                    className="w-full flex items-center justify-between py-2 mb-4 border-b border-gray-900 group"
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
-                                            <Briefcase size={20} />
-                                        </div>
-                                        <div className="text-left">
-                                            <h3 className="font-bold text-gray-900">Handlungsspezifische Qualifikationen (HQ)</h3>
-                                            <p className="text-xs text-gray-500">
-                                                {groupedGuides.HQ.Technik.length + groupedGuides.HQ.Organisation.length + groupedGuides.HQ['Führung und Personal'].length} Leitfäden
-                                            </p>
-                                        </div>
+                                    <div className="text-left">
+                                        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Handlungsspezifisch (HQ)</h3>
+                                        <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
+                                            {groupedGuides.HQ.Technik.length + groupedGuides.HQ.Organisation.length + groupedGuides.HQ['Führung und Personal'].length} Leitfäden
+                                        </p>
                                     </div>
-                                    {expandedSections.HQ ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                    {expandedSections.HQ ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                 </button>
                                 {expandedSections.HQ && (
-                                    <div className="p-4 pt-0 space-y-4">
+                                    <div className="space-y-6">
                                         {/* Technik */}
                                         {groupedGuides.HQ.Technik.length > 0 && (
                                             <div>
                                                 <button
                                                     onClick={() => toggleSection('HQ-Technik')}
-                                                    className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3"
+                                                    className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 hover:text-indigo-600"
                                                 >
-                                                    {expandedSections['HQ-Technik'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                    Handlungsbereich Technik ({groupedGuides.HQ.Technik.length})
+                                                    {expandedSections['HQ-Technik'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                    Technik ({groupedGuides.HQ.Technik.length})
                                                 </button>
                                                 {expandedSections['HQ-Technik'] && (
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ml-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 pl-6 border-l border-gray-100">
                                                         {groupedGuides.HQ.Technik.map(renderGuideCard)}
                                                     </div>
                                                 )}
@@ -398,13 +407,13 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                             <div>
                                                 <button
                                                     onClick={() => toggleSection('HQ-Organisation')}
-                                                    className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3"
+                                                    className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 hover:text-indigo-600"
                                                 >
-                                                    {expandedSections['HQ-Organisation'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                    Handlungsbereich Organisation ({groupedGuides.HQ.Organisation.length})
+                                                    {expandedSections['HQ-Organisation'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                    Organisation ({groupedGuides.HQ.Organisation.length})
                                                 </button>
                                                 {expandedSections['HQ-Organisation'] && (
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ml-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 pl-6 border-l border-gray-100">
                                                         {groupedGuides.HQ.Organisation.map(renderGuideCard)}
                                                     </div>
                                                 )}
@@ -416,13 +425,13 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                             <div>
                                                 <button
                                                     onClick={() => toggleSection('HQ-Führung und Personal')}
-                                                    className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3"
+                                                    className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 hover:text-indigo-600"
                                                 >
-                                                    {expandedSections['HQ-Führung und Personal'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                    Handlungsbereich Führung und Personal ({groupedGuides.HQ['Führung und Personal'].length})
+                                                    {expandedSections['HQ-Führung und Personal'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                    Führung und Personal ({groupedGuides.HQ['Führung und Personal'].length})
                                                 </button>
                                                 {expandedSections['HQ-Führung und Personal'] && (
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ml-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 pl-6 border-l border-gray-100">
                                                         {groupedGuides.HQ['Führung und Personal'].map(renderGuideCard)}
                                                     </div>
                                                 )}
@@ -435,24 +444,19 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
 
                     {/* Sonstige Section */}
                     {groupedGuides.Sonstige.length > 0 && (
-                        <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                        <div className="mb-8">
                             <button
                                 onClick={() => toggleSection('Sonstige')}
-                                className="w-full flex items-center justify-between p-4 hover:bg-gray-100 transition-colors"
+                                className="w-full flex items-center justify-between py-2 mb-4 border-b border-gray-900 group"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-gray-200 text-gray-600 rounded-lg">
-                                        <FileText size={20} />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="font-bold text-gray-900">Sonstige Themen</h3>
-                                        <p className="text-xs text-gray-500">{groupedGuides.Sonstige.length} Leitfäden</p>
-                                    </div>
+                                <div className="text-left">
+                                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Sonstige Themen</h3>
+                                    <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">{groupedGuides.Sonstige.length} Leitfäden</p>
                                 </div>
-                                {expandedSections.Sonstige ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                {expandedSections.Sonstige ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </button>
                             {expandedSections.Sonstige && (
-                                <div className="p-4 pt-0 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8">
                                     {groupedGuides.Sonstige.map(renderGuideCard)}
                                 </div>
                             )}
@@ -468,7 +472,17 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                     Neuen Leitfaden erstellen
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {topics.filter(t => !guides.some(g => g.topic === t)).map((topic) => (
+                    {topics.filter(t => {
+                        if (guides.some(g => g.topic === t)) return false;
+                        const tLower = t.toLowerCase();
+                        if (specialization === 'Infrastruktursysteme und Betriebstechnik') {
+                            if (tLower.includes('automatisierung') || tLower.includes('ait-spezifisch')) return false;
+                        }
+                        if (specialization === 'Automatisierungs- und Informationstechnik') {
+                            if (tLower.includes('infrastruktur') || tLower.includes('obt-spezifisch')) return false;
+                        }
+                        return true;
+                    }).map((topic) => (
                         <div
                             key={topic}
                             className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 transition-all"

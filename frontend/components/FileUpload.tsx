@@ -34,7 +34,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
 
     return (
         <div
-            className="w-full h-48 md:h-64 border-2 border-dashed border-indigo-300 rounded-2xl flex flex-col items-center justify-center bg-white/50 hover:bg-white/80 transition-all cursor-pointer group backdrop-blur-sm"
+            className="w-full h-48 md:h-64 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-white hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer group"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => document.getElementById('fileInput')?.click()}

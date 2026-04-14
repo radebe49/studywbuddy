@@ -81,29 +81,24 @@ const Sidebar: React.FC<SidebarProps> = ({
         <button
             key={paper.id}
             onClick={() => onSelectPaper(paper)}
-            className={`w-full text-left p-3 rounded-lg flex items-center gap-3 transition-all border group ${selectedPaperId === paper.id
-                ? 'bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-100'
-                : 'bg-transparent border-transparent hover:bg-gray-50'
+            className={`w-full text-left p-2.5 rounded-lg flex items-start gap-3 transition-all group ${selectedPaperId === paper.id
+                ? 'bg-gray-50/50'
+                : 'bg-transparent hover:bg-gray-50/50'
                 }`}
         >
-            <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${paper.status === 'completed' ? 'bg-green-100 text-green-600' :
-                paper.status === 'processing' ? 'bg-blue-100 text-blue-600' :
-                    paper.status === 'failed' ? 'bg-red-100 text-red-600' :
-                        'bg-gray-100 text-gray-500'
-                }`}>
-                {paper.status === 'processing' ? <Loader2 size={16} className="animate-spin" /> :
-                    paper.status === 'completed' ? <CheckCircle size={16} /> :
-                        paper.status === 'failed' ? <AlertCircle size={16} /> :
-                            <FileText size={16} />}
-            </div>
+            <div className={`mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full transition-colors ${paper.status === 'completed' ? 'bg-emerald-400' :
+                paper.status === 'processing' ? 'bg-blue-400 animate-pulse' :
+                    paper.status === 'failed' ? 'bg-red-400' :
+                        'bg-gray-300'
+                }`} />
             <div className="min-w-0 flex-1">
-                <p className={`text-sm font-medium truncate ${selectedPaperId === paper.id ? 'text-indigo-900' : 'text-gray-700 group-hover:text-gray-900'}`}>
+                <p className={`text-sm leading-snug truncate ${selectedPaperId === paper.id ? 'font-medium text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>
                     {paper.name}
                 </p>
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-[10px] text-gray-400 truncate mt-0.5 tracking-wide">
                     {paper.solution ? paper.solution.subject :
                         paper.status === 'processing' ? 'Verarbeitung...' :
-                            paper.status === 'failed' ? 'Analyse fehlgeschlagen' : 'Bereit'}
+                            paper.status === 'failed' ? 'Fehler' : 'Bereit'}
                 </p>
             </div>
         </button>
@@ -111,9 +106,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     // Helper to determine active state style
     const getNavItemClass = (isActive: boolean) =>
-        `w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-all font-medium ${isActive
-            ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-            : 'text-gray-600 hover:bg-gray-50'
+        `w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors text-sm ${isActive
+            ? 'font-medium text-gray-900 bg-gray-50/80'
+            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50/50'
         }`;
 
     return (
@@ -121,183 +116,149 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Mobile Backdrop */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm transition-opacity no-print"
+                    className="fixed inset-0 bg-black/30 z-30 md:hidden backdrop-blur-sm transition-opacity no-print"
                     onClick={onClose}
                 />
             )}
 
             <div className={`
-        fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 flex flex-col h-full shrink-0
-        transition-transform duration-300 ease-in-out w-80
+        fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-100 flex flex-col h-full shrink-0
+        transition-transform duration-300 ease-in-out w-72 md:w-80
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         md:relative md:translate-x-0
         no-print
       `}>
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                <div className="p-6 md:px-8 pb-4 flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 mb-1">
+                        <h1 className="text-xl font-semibold text-gray-900 tracking-tight mb-1">
                             ExamPilot
                         </h1>
-                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">KI-Lernbegleiter</p>
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">KI-Lernbegleiter</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="md:hidden p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                        className="md:hidden text-gray-400 hover:text-gray-900 transition-colors"
                     >
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Search Bar */}
-                <div className="px-4 pt-4 pb-2">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <div className="px-6 md:px-8 pb-4 pt-2">
+                    <div className="relative group">
+                        <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
                         <input
                             type="text"
-                            placeholder="Arbeiten, Fächer suchen..."
+                            placeholder="Suchen..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-gray-400"
+                            className="w-full pl-8 py-2 bg-transparent border-b border-gray-200 text-sm focus:outline-none focus:border-indigo-500 transition-all placeholder:text-gray-400"
                         />
                     </div>
                 </div>
 
-                <div className="p-4 space-y-2">
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Menü</div>
+                <div className="px-4 md:px-6 space-y-1 mt-2">
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2 mb-3">Menü</div>
 
-                    <button
-                        onClick={() => onNavigate('dashboard')}
-                        className={getNavItemClass(activeView === 'dashboard')}
-                    >
-                        <LayoutDashboard size={18} />
+                    <button onClick={() => onNavigate('dashboard')} className={getNavItemClass(activeView === 'dashboard')}>
+                        <LayoutDashboard size={16} className={activeView === 'dashboard' ? 'text-indigo-600' : 'text-gray-400'} />
                         Dashboard
                     </button>
 
-                    <button
-                        onClick={() => onNavigate('study-plan')}
-                        className={getNavItemClass(activeView === 'study-plan')}
-                    >
-                        <Calendar size={18} />
+                    <button onClick={() => onNavigate('study-plan')} className={getNavItemClass(activeView === 'study-plan')}>
+                        <Calendar size={16} className={activeView === 'study-plan' ? 'text-indigo-600' : 'text-gray-400'} />
                         Lernplan
                     </button>
 
-                    <button
-                        onClick={() => onNavigate('study-guides')}
-                        className={getNavItemClass(activeView === 'study-guides')}
-                    >
-                        <FileText size={18} />
+                    <button onClick={() => onNavigate('study-guides')} className={getNavItemClass(activeView === 'study-guides')}>
+                        <BookOpen size={16} className={activeView === 'study-guides' ? 'text-indigo-600' : 'text-gray-400'} />
                         Lernleitfäden
                     </button>
 
-                    <button
-                        onClick={() => onNavigate('fachgespraech')}
-                        className={getNavItemClass(activeView === 'fachgespraech')}
-                    >
-                        <MessageSquare size={18} />
+                    <button onClick={() => onNavigate('fachgespraech')} className={getNavItemClass(activeView === 'fachgespraech')}>
+                        <MessageSquare size={16} className={activeView === 'fachgespraech' ? 'text-indigo-600' : 'text-gray-400'} />
                         Fachgespräch Bot
                     </button>
 
-                    <button
-                        onClick={() => onNavigate('settings')}
-                        className={getNavItemClass(activeView === 'settings')}
-                    >
-                        <SettingsIcon size={18} />
+                    <button onClick={() => onNavigate('settings')} className={getNavItemClass(activeView === 'settings')}>
+                        <SettingsIcon size={16} className={activeView === 'settings' ? 'text-indigo-600' : 'text-gray-400'} />
                         Profil & Setup
                     </button>
 
-                    <button
-                        onClick={onImportClick}
-                        className="mt-4 w-full py-3 px-4 bg-gray-900 hover:bg-black text-white rounded-xl font-medium shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
-                    >
-                        <Plus size={18} /> Arbeiten importieren
-                    </button>
+                    <div className="pt-4 pb-2 px-2">
+                        <button
+                            onClick={onImportClick}
+                            className="w-full py-2.5 text-xs bg-gray-900 hover:bg-black text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2 active:scale-95"
+                        >
+                            <Plus size={14} /> Importieren
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 custom-scrollbar">
-                    <div className="flex items-center justify-between px-2 mb-2 mt-6">
-                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                            {searchTerm ? 'Suchergebnisse' : 'Prüfungsarbeiten'}
+                <div className="flex-1 overflow-y-auto px-4 md:px-6 space-y-2 custom-scrollbar mt-4">
+                    <div className="flex items-center justify-between px-2 mb-4">
+                        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                            {searchTerm ? 'Suchergebnisse' : 'Dokumente'}
                         </div>
                         <button
                             onClick={() => setGroupByQualification(!groupByQualification)}
-                            className={`text-xs px-2 py-1 rounded transition-colors ${groupByQualification ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Nach IHK-Struktur gruppieren"
+                            className={`text-gray-400 hover:text-gray-800 transition-colors ${groupByQualification ? 'text-indigo-600' : ''}`}
+                            title="Formatierte Struktur"
                         >
-                            <BookOpen size={14} />
+                            <LayoutDashboard size={14} />
                         </button>
                     </div>
 
                     {filteredPapers.length === 0 && (
-                        <div className="text-center py-8 px-4 text-gray-400 text-sm italic">
-                            {searchTerm ? 'Keine Treffer gefunden.' : 'Noch keine Arbeiten.'}
+                        <div className="text-left px-2 text-gray-400 text-sm">
+                            {searchTerm ? 'Keine Treffer.' : 'Keine Dokumente.'}
                         </div>
                     )}
 
                     {/* Grouped View */}
                     {groupByQualification && filteredPapers.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="space-y-6">
                             {/* BQ Group */}
                             {groupedPapers.BQ.length > 0 && (
-                                <div className="bg-blue-50/50 rounded-lg border border-blue-100 overflow-hidden">
-                                    <button
-                                        onClick={() => toggleGroup('BQ')}
-                                        className="w-full flex items-center justify-between p-2 hover:bg-blue-50 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <GraduationCap size={14} className="text-blue-600" />
-                                            <span className="text-xs font-semibold text-gray-700">Basisqualifikationen</span>
-                                            <span className="text-xs text-gray-400">({groupedPapers.BQ.length})</span>
-                                        </div>
-                                        {expandedGroups.BQ ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <div>
+                                    <button onClick={() => toggleGroup('BQ')} className="w-full flex items-center justify-between px-2 pb-2 mb-2 border-b border-gray-100 group">
+                                        <span className="text-[11px] font-semibold text-gray-900 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">Basisqualifikationen</span>
+                                        <span className="text-[10px] text-gray-400 font-medium">{groupedPapers.BQ.length}</span>
                                     </button>
-                                    {expandedGroups.BQ && groupedPapers.BQ.map(paper => renderPaperButton(paper))}
+                                    {expandedGroups.BQ && <div className="space-y-1">{groupedPapers.BQ.map(paper => renderPaperButton(paper))}</div>}
                                 </div>
                             )}
 
                             {/* HQ Group */}
                             {groupedPapers.HQ.length > 0 && (
-                                <div className="bg-amber-50/50 rounded-lg border border-amber-100 overflow-hidden">
-                                    <button
-                                        onClick={() => toggleGroup('HQ')}
-                                        className="w-full flex items-center justify-between p-2 hover:bg-amber-50 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <Briefcase size={14} className="text-amber-600" />
-                                            <span className="text-xs font-semibold text-gray-700">Handlungsspezifisch</span>
-                                            <span className="text-xs text-gray-400">({groupedPapers.HQ.length})</span>
-                                        </div>
-                                        {expandedGroups.HQ ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <div>
+                                    <button onClick={() => toggleGroup('HQ')} className="w-full flex items-center justify-between px-2 pb-2 mb-2 border-b border-gray-100 group">
+                                        <span className="text-[11px] font-semibold text-gray-900 uppercase tracking-wider group-hover:text-amber-600 transition-colors">Handlungsspezifisch</span>
+                                        <span className="text-[10px] text-gray-400 font-medium">{groupedPapers.HQ.length}</span>
                                     </button>
-                                    {expandedGroups.HQ && groupedPapers.HQ.map(paper => renderPaperButton(paper))}
+                                    {expandedGroups.HQ && <div className="space-y-1">{groupedPapers.HQ.map(paper => renderPaperButton(paper))}</div>}
                                 </div>
                             )}
 
                             {/* Unbekannt Group */}
                             {groupedPapers.Unbekannt.length > 0 && (
-                                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                                    <button
-                                        onClick={() => toggleGroup('Unbekannt')}
-                                        className="w-full flex items-center justify-between p-2 hover:bg-gray-100 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <FileText size={14} className="text-gray-500" />
-                                            <span className="text-xs font-semibold text-gray-700">Nicht klassifiziert</span>
-                                            <span className="text-xs text-gray-400">({groupedPapers.Unbekannt.length})</span>
-                                        </div>
-                                        {expandedGroups.Unbekannt ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <div>
+                                    <button onClick={() => toggleGroup('Unbekannt')} className="w-full flex items-center justify-between px-2 pb-2 mb-2 border-b border-gray-100 group">
+                                        <span className="text-[11px] font-semibold text-gray-900 uppercase tracking-wider group-hover:text-gray-600 transition-colors">Nicht Klassifiziert</span>
+                                        <span className="text-[10px] text-gray-400 font-medium">{groupedPapers.Unbekannt.length}</span>
                                     </button>
-                                    {expandedGroups.Unbekannt && groupedPapers.Unbekannt.map(paper => renderPaperButton(paper))}
+                                    {expandedGroups.Unbekannt && <div className="space-y-1">{groupedPapers.Unbekannt.map(paper => renderPaperButton(paper))}</div>}
                                 </div>
                             )}
                         </div>
                     )}
 
                     {/* Flat View (default) */}
-                    {!groupByQualification && filteredPapers.map(paper => renderPaperButton(paper))}
+                    {!groupByQualification && <div className="space-y-1">{filteredPapers.map(paper => renderPaperButton(paper))}</div>}
                 </div>
 
-                <div className="p-4 border-t border-gray-100 text-center">
-                    <p className="text-xs text-gray-300">v2.0 • Enterprise Edition</p>
+                <div className="p-6 md:px-8 bg-transparent">
+                    <p className="text-[10px] font-medium tracking-widest text-gray-300 uppercase">v2.0 • Pro Max</p>
                 </div>
             </div>
         </>

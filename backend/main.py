@@ -2,14 +2,16 @@ import os
 import json
 import asyncio
 import re
+import hmac
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from supabase import create_client, Client
 from pypdf import PdfReader
-import google.generativeai as genai
+from google import genai
 import uvicorn
 from dotenv import load_dotenv
 import uuid
@@ -21,25 +23,64 @@ load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+APP_SECRET = os.environ.get("APP_SECRET")
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "ALLOWED_ORIGINS",
+        "https://studywbuddy.vercel.app,http://localhost:3000",
+    ).split(",")
+    if o.strip()
+]
 
 if not all([SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY]):
     raise ValueError("Missing environment variables: SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY")
 
+if not APP_SECRET or len(APP_SECRET) < 16:
+    raise ValueError(
+        "APP_SECRET env var must be set to a non-trivial value (>=16 chars). "
+        "No fallback is permitted — refusing to boot."
+    )
+
 # Initialize Clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-genai.configure(api_key=GOOGLE_API_KEY)
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
-SELECTED_MODEL = "gemini-3-flash-preview"
+# Model Definitions (2026 Fleet)
+GEMMA_MODEL = "gemma-4-31b-it"        # High precision, German extraction
+GEMINI_MODEL = "gemini-3-flash-preview" # Large context, voice, planning
+
+# Upload limits
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))  # 25 MB default
+PDF_MAGIC = b"%PDF-"
 
 app = FastAPI(title="DadTutor API")
 
-# CORS
+PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+
+
+@app.middleware("http")
+async def verify_app_secret(request: Request, call_next):
+    # Always let CORS preflight and public paths through; CORS middleware (added
+    # below, wraps this one) will attach the right headers on responses.
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+
+    secret = request.headers.get("X-App-Secret", "")
+    if not hmac.compare_digest(secret, APP_SECRET):
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+    return await call_next(request)
+
+
+# CORS added AFTER the auth middleware so CORS becomes the outermost layer and
+# correctly decorates 401/500 responses with Access-Control-Allow-* headers.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "https://studywbuddy.vercel.app"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-App-Secret", "Authorization"],
 )
 
 @app.get("/health")
@@ -63,6 +104,43 @@ def health_check():
         status["status"] = "degraded"
         
     return status
+
+@app.get("/settings")
+def get_user_settings():
+    """Get the current user specialization."""
+    res = supabase.table("user_settings").select("*").eq("user_id", "default_user").execute()
+    if res.data:
+        return res.data[0]
+    return {"specialization": None}
+
+class UpdateSettingsRequest(BaseModel):
+    specialization: str
+
+@app.post("/settings")
+def update_user_settings(request: UpdateSettingsRequest):
+    """Update the current user specialization."""
+    data = {
+        "user_id": "default_user",
+        "specialization": request.specialization
+    }
+    # Upsert
+    res = supabase.table("user_settings").upsert(data, on_conflict="user_id").execute()
+    return res.data[0]
+
+@app.post("/maintenance/timeout-sweep")
+def timeout_sweep():
+    """Mark exams stuck in 'processing' for more than 15 minutes as failed."""
+    fifteen_mins_ago = (datetime.datetime.now() - datetime.timedelta(minutes=15)).isoformat()
+    
+    # We use a raw query or try to filter by date
+    # Supabase Python client filter
+    res = supabase.table("exams")\
+        .update({"status": "failed", "error_message": "Verarbeitung abgebrochen (Zeitüberschreitung)"})\
+        .eq("status", "processing")\
+        .lt("upload_date", fifteen_mins_ago)\
+        .execute()
+        
+    return {"count": len(res.data) if res.data else 0}
 
 # --- Models ---
 
@@ -284,20 +362,34 @@ Return the result strictly as a valid JSON object matching this schema:
   "difficulty": "Easy" | "Medium" | "Hard",
   "topics": ["String"],
   "summary": "String",
+  "scenarios": [
+    {
+      "index": Number,
+      "contextText": "String (The shared scenario text / Situationsbeschreibung)"
+    }
+  ],
   "questions": [
     {
       "questionNumber": "String",
       "questionText": "String",
+      "scenarioIndex": Number (Reference the index in 'scenarios' list above if this question belongs to a scenario),
       "type": "Multiple Choice" | "True/False" | "Short Answer" | "Essay" | "Calculation",
       "qualificationArea": "BQ" | "HQ",
       "subject": "String (official IHK subject name)",
       "topic": "String (specific sub-topic)",
       "solution": "String",
-      "explanation": "String"
+      "explanation": "String",
+      "points": {
+        "total": Number,
+        "breakdown": [
+          {"step": "String", "pts": Number}
+        ]
+      }
     }
   ]
 }
 """
+
 
 PLAN_SYSTEM_PROMPT = """
 Based on the following analysis of past exam papers, create a comprehensive 7-day study plan in German (Deutsch) to help a student master these subjects.
@@ -359,8 +451,9 @@ Create a study guide that includes:
 2. **Key Concepts**: The most important ideas a student MUST understand, as bullet points.
 3. **Formulas/Rules**: Any formulas, theorems, or rules that apply (if applicable). Use LaTeX notation.
 4. **Common Mistakes**: What students typically get wrong and how to avoid it.
-5. **Example Problems**: 2-3 worked examples with step-by-step solutions.
+5. **Example Problems**: 2-3 worked examples with step-by-step solutions and IHK-compliant point breakdowns (showing how to earn maximum points).
 6. **Quick Tips**: Memory tricks, shortcuts, or study strategies.
+7. **Punkte-Strategie (Point Strategy)**: Specific advice on how to structure answers to maximize points for this type of topic in an IHK exam.
 
 Output valid JSON matching this schema:
 {
@@ -409,8 +502,7 @@ def process_exam_background(exam_id: str, file_path: str):
         # Format candidates for the prompt
         candidates_json_str = json.dumps(candidate_questions, indent=2) if candidate_questions else "(None found by pre-processor)"
 
-        print(f"Calling Gemini ({SELECTED_MODEL}) for exam {exam_id}...")
-        model = genai.GenerativeModel(SELECTED_MODEL)
+        print(f"Calling Gemma ({GEMMA_MODEL}) for exam {exam_id}...")
         
         # Enhanced prompt with pre-extracted candidates
         full_prompt = f"""{EXAM_SYSTEM_PROMPT}
@@ -422,9 +514,12 @@ def process_exam_background(exam_id: str, file_path: str):
 {raw_text[:400000]}
 """
         
-        response = model.generate_content(
-            full_prompt, 
-            generation_config={"response_mime_type": "application/json"}
+        response = client.models.generate_content(
+            model=GEMMA_MODEL,
+            contents=full_prompt,
+            config={
+                'response_mime_type': 'application/json',
+            }
         )
         
         ai_output = parse_json_from_markdown(response.text)
@@ -443,8 +538,51 @@ def process_exam_background(exam_id: str, file_path: str):
         else:
             supabase.table("study_plans").insert(study_plan_data).execute()
 
-        supabase.table("exams").update({"status": "completed"}).eq("id", exam_id).execute()
-        print(f"Exam {exam_id} processed successfully.")
+        # Get specialization from settings
+        settings_res = supabase.table("user_settings").select("specialization").eq("user_id", "default_user").execute()
+        user_specialization = settings_res.data[0]['specialization'] if settings_res.data else None
+
+        # Update exam record with extracted metadata
+        supabase.table("exams").update({
+            "status": "completed",
+            "qualification_area": ai_output.get("qualificationArea"),
+            "handlungsbereich": ai_output.get("handlungsbereich"),
+            "specialization": user_specialization
+        }).eq("id", exam_id).execute()
+
+        # --- NEW: Save scenarios and questions to structured tables ---
+        # 1. Save Scenarios
+        scenario_map = {} # ai_index -> db_uuid
+        for ai_scenario in ai_output.get("scenarios", []):
+            scenario_data = {
+                "exam_id": exam_id,
+                "context_text": ai_scenario.get("contextText"),
+                "order": ai_scenario.get("index", 0)
+            }
+            s_res = supabase.table("scenarios").insert(scenario_data).execute()
+            if s_res.data:
+                scenario_map[ai_scenario.get("index")] = s_res.data[0]['id']
+
+        # 2. Save Questions
+        for ai_q in ai_output.get("questions", []):
+            scenario_idx = ai_q.get("scenarioIndex")
+            q_data = {
+                "exam_id": exam_id,
+                "scenario_id": scenario_map.get(scenario_idx) if scenario_idx is not None else None,
+                "question_number": ai_q.get("questionNumber"),
+                "question_text": ai_q.get("questionText"),
+                "type": ai_q.get("type"),
+                "qualification_area": ai_q.get("qualificationArea"),
+                "subject": ai_q.get("subject"),
+                "topic": ai_q.get("topic"),
+                "solution": ai_q.get("solution"),
+                "explanation": ai_q.get("explanation"),
+                "points_total": ai_q.get("points", {}).get("total"),
+                "points_breakdown": ai_q.get("points", {}).get("breakdown")
+            }
+            supabase.table("questions").insert(q_data).execute()
+            
+        print(f"Exam {exam_id} processed successfully with structured scenarios and questions.")
 
     except Exception as e:
         error_msg = str(e)
@@ -458,42 +596,91 @@ def process_exam_background(exam_id: str, file_path: str):
             
         supabase.table("exams").update({
             "status": "failed",
-            "error_message": error_msg[:1000]  # Truncate to avoid DB errors
+            "error_message": error_msg[:1000]
         }).eq("id", exam_id).execute()
+
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
 
 # --- Endpoints ---
 
+def _safe_filename(name: Optional[str]) -> str:
+    """Strip path separators and exotic chars from a client-supplied filename."""
+    base = os.path.basename(name or "upload.pdf")
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    if not base.lower().endswith(".pdf"):
+        base += ".pdf"
+    return base[:128] or "upload.pdf"
+
+
 @app.post("/upload")
 async def upload_exam(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
-    # Ensure temp dir exists
-    if not os.path.exists("temp"):
-        os.makedirs("temp")
-        
-    temp_filename = f"temp/temp_{file.filename}"
-    with open(temp_filename, "wb") as buffer:
-        buffer.write(await file.read())
+    # 1. Validate content type & extension before reading the whole body
+    declared_ct = (file.content_type or "").lower()
+    if declared_ct and declared_ct not in ("application/pdf", "application/x-pdf"):
+        raise HTTPException(status_code=415, detail="Nur PDF-Dateien werden unterstützt.")
 
+    safe_name = _safe_filename(file.filename)
+
+    # 2. Stream into a temp file with a size cap & magic-byte check on the first chunk
+    os.makedirs("temp", exist_ok=True)
+    local_path = f"temp/{uuid.uuid4()}_{safe_name}"
+
+    total = 0
+    header_checked = False
     try:
+        with open(local_path, "wb") as f:
+            while True:
+                chunk = await file.read(1024 * 1024)  # 1 MiB chunks
+                if not chunk:
+                    break
+                if not header_checked:
+                    if not chunk.startswith(PDF_MAGIC):
+                        raise HTTPException(
+                            status_code=415,
+                            detail="Datei ist keine gültige PDF (Magic-Bytes fehlen).",
+                        )
+                    header_checked = True
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Datei überschreitet Maximum ({MAX_UPLOAD_BYTES // (1024*1024)} MB).",
+                    )
+                f.write(chunk)
+
+        if total == 0 or not header_checked:
+            raise HTTPException(status_code=400, detail="Leere oder ungültige Datei.")
+
+        # 3. Upload to Supabase Storage
+        storage_path = f"exams/{uuid.uuid4()}_{safe_name}"
+        with open(local_path, "rb") as f:
+            supabase.storage.from_("exams").upload(path=storage_path, file=f)
+
+        # 4. Create database record
         exam_data = {
-            "filename": file.filename,
-            "storage_path": temp_filename,
-            "status": "uploading"
+            "filename": safe_name,
+            "storage_path": storage_path,
+            "status": "uploading",
         }
         res = supabase.table("exams").insert(exam_data).execute()
         if not res.data:
-             raise HTTPException(status_code=500, detail="Failed to insert into DB")
-             
-        exam_id = res.data[0]['id']
+            raise HTTPException(status_code=500, detail="Failed to insert into DB")
 
-        background_tasks.add_task(process_exam_background, exam_id, temp_filename)
-        
+        exam_id = res.data[0]["id"]
+
+        # 5. Trigger background processing
+        background_tasks.add_task(process_exam_background, exam_id, local_path)
+
         return {"message": "Upload successful", "exam_id": exam_id}
+    except HTTPException:
+        if os.path.exists(local_path):
+            os.remove(local_path)
+        raise
     except Exception as e:
-        if os.path.exists(temp_filename):
-            os.remove(temp_filename)
+        if os.path.exists(local_path):
+            os.remove(local_path)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/exams")
@@ -502,13 +689,100 @@ def list_exams():
     res = supabase.table("exams").select("*").order("upload_date", desc=True).execute()
     return res.data
 
+@app.post("/retry/{exam_id}")
+async def retry_exam(exam_id: str, background_tasks: BackgroundTasks):
+    # Fetch exam details
+    res = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    
+    exam = res.data
+    storage_path = exam['storage_path']
+    
+    # Download from storage to temp
+    if not os.path.exists("temp"):
+        os.makedirs("temp")
+    
+    local_path = f"temp/retry_{uuid.uuid4()}_{exam['filename']}"
+    try:
+        with open(local_path, "wb+") as f:
+            res = supabase.storage.from_("exams").download(storage_path)
+            f.write(res)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download from storage: {e}")
+
+    # Mark as processing
+    supabase.table("exams").update({"status": "processing", "error_message": None}).eq("id", exam_id).execute()
+    
+    background_tasks.add_task(process_exam_background, exam_id, local_path)
+    return {"message": "Retry started", "exam_id": exam_id}
+
 @app.get("/solutions/{exam_id}")
 def get_solution(exam_id: str):
-    # Fetch the solution stored in 'study_plans' table (legacy name)
-    res = supabase.table("study_plans").select("raw_json").eq("exam_id", exam_id).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Solution not found")
-    return res.data[0]['raw_json']
+    # 1. Fetch Exam metadata
+    exam_res = supabase.table("exams").select("*").eq("id", exam_id).execute()
+    if not exam_res.data:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    exam = exam_res.data[0]
+
+    # 2. Try fetching from structured tables
+    q_res = supabase.table("questions").select("*, scenarios(*)").eq("exam_id", exam_id).execute()
+    
+    if q_res.data:
+        # Reconstruct the ExamSolution structure for the frontend
+        sp_res = supabase.table("study_plans").select("raw_json").eq("exam_id", exam_id).execute()
+        raw_json = sp_res.data[0]['raw_json'] if sp_res.data else {}
+        
+        # Map structured questions back to frontend format
+        questions = []
+        for q in q_res.data:
+            scenario_text = q.get("scenarios", {}).get("context_text") if q.get("scenarios") else None
+            
+            # Format points breakdown as string for frontend display
+            pts_breakdown = q.get("points_breakdown")
+            pts_str = ""
+            if isinstance(pts_breakdown, list):
+                pts_str = "\n".join([f"• {b.get('step')}: {b.get('pts')} Pkt" for b in pts_breakdown if isinstance(b, dict)])
+            elif isinstance(pts_breakdown, str):
+                pts_str = pts_breakdown
+                
+            questions.append({
+                "questionNumber": q.get("question_number"),
+                "questionText": q.get("question_text"),
+                "contextScenario": scenario_text,
+                "type": q.get("type"),
+                "qualificationArea": q.get("qualification_area"),
+                "subject": q.get("subject"),
+                "topic": q.get("topic"),
+                "solution": q.get("solution"),
+                "explanation": q.get("explanation"),
+                "points": q.get("points_total"),
+                "pointsBreakdown": pts_str
+            })
+        
+        # Sort questions by number if possible
+        try:
+            questions.sort(key=lambda x: int(x['questionNumber'].split('.')[0]) if x['questionNumber'] else 99)
+        except:
+            pass
+
+        return {
+            "subject": raw_json.get("subject", exam.get("qualification_area")),
+            "qualificationArea": exam.get("qualification_area"),
+            "handlungsbereich": exam.get("handlungsbereich"),
+            "year": raw_json.get("year"),
+            "difficulty": raw_json.get("difficulty", "Medium"),
+            "topics": raw_json.get("topics", []),
+            "summary": raw_json.get("summary", ""),
+            "questions": questions
+        }
+
+    # 3. Fallback to legacy raw_json
+    sp_res = supabase.table("study_plans").select("raw_json").eq("exam_id", exam_id).execute()
+    if sp_res.data:
+        return sp_res.data[0]['raw_json']
+    
+    raise HTTPException(status_code=404, detail="Solution not found")
 
 @app.post("/generate-plan")
 async def generate_plan(request: GeneratePlanRequest):
@@ -518,11 +792,14 @@ async def generate_plan(request: GeneratePlanRequest):
         papers_summary += f"Subject: {p.get('subject', 'Unknown')}, Topics: {', '.join(p.get('topics', []))}, Difficulty: {p.get('difficulty', 'Unknown')}\n"
 
     try:
-        print(f"Generating plan with {SELECTED_MODEL}...")
-        model = genai.GenerativeModel(SELECTED_MODEL)
-        response = model.generate_content(
-            f"{PLAN_SYSTEM_PROMPT}\n\nData:\n{papers_summary}",
-            generation_config={"response_mime_type": "application/json"}
+        # Planning across multiple papers involves large context aggregation
+        print(f"Generating plan with {GEMINI_MODEL}...")
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=f"{PLAN_SYSTEM_PROMPT}\n\nData:\n{papers_summary}",
+            config={
+                'response_mime_type': 'application/json',
+            }
         )
         plan_json = parse_json_from_markdown(response.text)
         
@@ -606,16 +883,18 @@ class GenerateStudyGuideRequest(BaseModel):
 async def generate_study_guide(request: GenerateStudyGuideRequest):
     """Generate a study guide for a specific topic by aggregating questions from exams."""
     try:
-        # 1. Fetch exam solutions to aggregate questions by topic
+        # 1. Fetch questions related to the topic
+        query = supabase.table("questions").select("*, scenarios(context_text)")
         if request.exam_ids:
-            # Filter to specific exams
-            res = supabase.table("study_plans").select("*").in_("exam_id", request.exam_ids).execute()
-        else:
-            # Get all completed exams
-            res = supabase.table("study_plans").select("*").execute()
+            query = query.in_("exam_id", request.exam_ids)
+        
+        res = query.execute()
         
         if not res.data:
-            raise HTTPException(status_code=404, detail="No exam data found")
+            # Fallback to legacy study_plans if questions table is empty for some reason
+            res_legacy = supabase.table("study_plans").select("*").execute()
+            # ... (omitting legacy fallback for brevity, but could keep it)
+            raise HTTPException(status_code=404, detail="No structured question data found. Please trigger an analysis first.")
         
         # 2. Extract questions matching the topic
         topic_lower = request.topic.lower()
@@ -623,39 +902,42 @@ async def generate_study_guide(request: GenerateStudyGuideRequest):
         subject = None
         source_exam_ids = []
         
-        for row in res.data:
-            raw_json = row.get("raw_json", {})
-            if not subject:
-                subject = raw_json.get("subject")
-            
-            questions = raw_json.get("questions", [])
-            for q in questions:
-                q_topic = q.get("topic", "").lower()
-                if topic_lower in q_topic or q_topic in topic_lower:
-                    related_questions.append({
-                        "questionText": q.get("questionText", ""),
-                        "solution": q.get("solution", ""),
-                        "explanation": q.get("explanation", "")
-                    })
-                    if row.get("exam_id") not in source_exam_ids:
-                        source_exam_ids.append(row.get("exam_id"))
+        for q in res.data:
+            q_topic = (q.get("topic") or "").lower()
+            if topic_lower in q_topic or q_topic in topic_lower:
+                scenario_text = q.get("scenarios", {}).get("context_text") if q.get("scenarios") else None
+                related_questions.append({
+                    "questionText": q.get("question_text", ""),
+                    "solution": q.get("solution", ""),
+                    "explanation": q.get("explanation", ""),
+                    "points": q.get("points_total"),
+                    "scenario": scenario_text
+                })
+                if q.get("exam_id") not in source_exam_ids:
+                    source_exam_ids.append(q.get("exam_id"))
+                if not subject:
+                    subject = q.get("subject")
         
         if not related_questions:
             raise HTTPException(status_code=404, detail=f"No questions found for topic: {request.topic}")
         
         # 3. Generate study guide using LLM
-        questions_text = "\n\n".join([
-            f"Q: {q['questionText']}\nA: {q['solution']}\nExplanation: {q['explanation']}"
-            for q in related_questions[:10]  # Limit to 10 questions to avoid token overflow
-        ])
+        formatted_qs = []
+        for q in related_questions[:15]:
+            scenario_part = f"SCENARIO: {q['scenario']}\n" if q['scenario'] else ""
+            formatted_qs.append(f"{scenario_part}Q: {q['questionText']} ({q['points'] or '?' } Pkt)\nA: {q['solution']}\nExplanation: {q['explanation']}")
+        questions_text = "\n\n".join(formatted_qs)
         
         prompt = STUDY_GUIDE_PROMPT.format(topic=request.topic, questions=questions_text)
         
-        print(f"Generating study guide for topic: {request.topic}...")
-        model = genai.GenerativeModel(SELECTED_MODEL)
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        # High precision requirements for study guides
+        print(f"Generating study guide with {GEMMA_MODEL} for topic: {request.topic}...")
+        response = client.models.generate_content(
+            model=GEMMA_MODEL,
+            contents=prompt,
+            config={
+                'response_mime_type': 'application/json',
+            }
         )
         
         guide_json = parse_json_from_markdown(response.text)
@@ -669,6 +951,7 @@ async def generate_study_guide(request: GenerateStudyGuideRequest):
             "formulas": guide_json.get("formulas", []),
             "common_mistakes": guide_json.get("commonMistakes", []),
             "example_questions": guide_json.get("exampleProblems", []),
+            "point_strategy": guide_json.get("pointStrategy", ""),
             "source_exam_ids": source_exam_ids
         }
         
@@ -742,32 +1025,30 @@ def list_available_topics():
 async def chat_fachgespraech(request: FachgespraechRequest):
     """Simulate a Fachgespräch (oral exam defense)."""
     try:
-        model = genai.GenerativeModel(SELECTED_MODEL)
-        
         # Prepare history for Gemini
         chat_history = []
         for msg in request.messages[:-1]: # All but the last one
             chat_history.append({
                 "role": "user" if msg.role == "user" else "model",
-                "parts": [msg.content]
+                "parts": [{"text": msg.content}]
             })
         
         system_instructions = FACHGESPRAECH_SYSTEM_PROMPT.format(
             topic=request.context_topic or "Elektrotechnik Allgemein"
         )
         
+        # Oral prep uses Gemini 3 Flash for speed and conversational nuance
         # Start a chat session
-        chat = model.start_chat(history=chat_history)
-        
-        # Send system prompt as the first message or personality instruction
-        # Note: Gemini 1.5 prefers system_instruction in GenerativeModel init, 
-        # but for this script's patterns we can prefix the first message or use it as a preamble.
-        # However, to maintain flow, we'll just send the last message with the context.
+        chat = client.chats.create(
+            model=GEMINI_MODEL,
+            config={
+                'system_instruction': system_instructions
+            },
+            history=chat_history
+        )
         
         last_user_message = request.messages[-1].content
-        prompt = f"{system_instructions}\n\nUser Question/Answer: {last_user_message}"
-        
-        response = chat.send_message(prompt)
+        response = chat.send_message(last_user_message)
         
         return {"role": "assistant", "content": response.text}
     except Exception as e:

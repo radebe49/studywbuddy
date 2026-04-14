@@ -25,47 +25,114 @@ const App: React.FC = () => {
 
     // --- Persist Specialization ---
     useEffect(() => {
-        const saved = localStorage.getItem('user_specialization') as Specialization;
-        if (saved) setSpecialization(saved);
+        const fetchSettings = async () => {
+            try {
+                const settings = await api.getSettings();
+                if (settings.specialization) {
+                    setSpecialization(settings.specialization as Specialization);
+                    localStorage.setItem('user_specialization', settings.specialization);
+                } else {
+                    const saved = localStorage.getItem('user_specialization') as Specialization;
+                    if (saved) setSpecialization(saved);
+                }
+            } catch (e) {
+                console.error("Failed to fetch settings", e);
+                const saved = localStorage.getItem('user_specialization') as Specialization;
+                if (saved) setSpecialization(saved);
+            }
+        };
+        fetchSettings();
     }, []);
 
-    const handleSpecializationChange = (spec: Specialization) => {
+    const handleSpecializationChange = async (spec: Specialization) => {
         setSpecialization(spec);
         localStorage.setItem('user_specialization', spec);
+        try {
+            await api.updateSettings(spec);
+        } catch (e) {
+            console.error("Failed to backup settings to server", e);
+        }
     };
 
     // --- Data Fetching ---
+    // Only hydrate solutions for papers that newly completed; keep cached ones as-is
+    // so we stop re-downloading every solution on every poll tick.
     const refreshPapers = async () => {
         try {
             const list = await api.getExams();
 
-            // Hydrate with solutions for completed papers
-            const detailedList = await Promise.all(list.map(async (p) => {
-                if (p.status === 'completed') {
+            setPapers((prev) => {
+                const prevById = new Map(prev.map((p) => [p.id, p]));
+                return list.map((p) => {
+                    const cached = prevById.get(p.id);
+                    if (cached?.solution && cached.status === 'completed' && p.status === 'completed') {
+                        return { ...p, solution: cached.solution };
+                    }
+                    return p;
+                });
+            });
+
+            // Fire hydration for completed papers that don't yet have a solution cached
+            const needsSolution = list.filter(
+                (p) => p.status === 'completed',
+            );
+            await Promise.all(
+                needsSolution.map(async (p) => {
+                    // skip if we already have it in local state
+                    const already = papersRef.current.find((x) => x.id === p.id && x.solution);
+                    if (already) return;
                     try {
-                        // Check if we already have it in state to avoid refetch? 
-                        // For now, simpliest valid approach: fetch. 
-                        // Optimization: caching could be done here.
                         const sol = await api.getSolution(p.id);
-                        return { ...p, solution: sol };
+                        setPapers((cur) => cur.map((x) => (x.id === p.id ? { ...x, solution: sol } : x)));
                     } catch (e) {
                         console.error(`Failed to load solution for ${p.id}`, e);
-                        return p;
                     }
-                }
-                return p;
-            }));
-
-            setPapers(detailedList);
+                }),
+            );
         } catch (e) {
-            console.error("Failed to fetch exams", e);
+            console.error('Failed to fetch exams', e);
         }
     };
 
+    // Ref mirror of papers so refreshPapers can read the latest without re-binding
+    const papersRef = React.useRef<ExamPaper[]>([]);
     useEffect(() => {
-        refreshPapers();
-        const interval = setInterval(refreshPapers, 5000); // Poll every 5s
-        return () => clearInterval(interval);
+        papersRef.current = papers;
+    }, [papers]);
+
+    // Adaptive polling: fast cadence only while an exam is actively processing,
+    // slow background cadence otherwise. Pauses entirely when the tab is hidden.
+    useEffect(() => {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let cancelled = false;
+
+        const tick = async () => {
+            if (cancelled) return;
+            if (typeof document !== 'undefined' && document.hidden) {
+                timer = setTimeout(tick, 15000);
+                return;
+            }
+            await refreshPapers();
+            if (cancelled) return;
+            const hasActive = papersRef.current.some(
+                (p) => p.status === 'processing' || p.status === 'uploading',
+            );
+            timer = setTimeout(tick, hasActive ? 5000 : 30000);
+        };
+
+        tick();
+        const onVisible = () => {
+            if (!document.hidden && timer) {
+                clearTimeout(timer);
+                tick();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, []);
 
     // --- Action Handlers ---
@@ -77,6 +144,15 @@ const App: React.FC = () => {
             await refreshPapers(); // Immediate refresh
         } catch (e) {
             alert("Upload fehlgeschlagen");
+        }
+    };
+
+    const handleRetryPaper = async (paperId: string) => {
+        try {
+            await api.retryExam(paperId);
+            await refreshPapers();
+        } catch (e) {
+            alert("Retry fehlgeschlagen. Möglicherweise ist die Datei nicht mehr auf dem Server vorhanden.");
         }
     };
 
@@ -126,6 +202,7 @@ const App: React.FC = () => {
                     <ExamViewer
                         paper={paper}
                         onClose={() => handleNavigate('dashboard')}
+                        specialization={specialization}
                     />
                 );
             }
@@ -166,6 +243,7 @@ const App: React.FC = () => {
                 studyPlan={studyPlan}
                 onFileUpload={handleFileUpload}
                 onViewPaper={handleSelectPaper}
+                onRetryPaper={handleRetryPaper}
                 onGeneratePlan={handleCreateStudyPlan}
                 onNavigateToPlan={() => handleNavigate('study-plan')}
                 specialization={specialization}
@@ -175,7 +253,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-surface-dark overflow-hidden font-sans text-gray-900">
+        <div className="flex h-screen bg-white overflow-hidden font-sans text-gray-900">
             <Sidebar
                 papers={papers}
                 activeView={activeView}
@@ -187,7 +265,7 @@ const App: React.FC = () => {
                 onClose={() => setIsSidebarOpen(false)}
             />
 
-            <main className="flex-1 bg-gray-50/50 relative overflow-hidden flex flex-col w-full">
+            <main className="flex-1 bg-white relative overflow-hidden flex flex-col w-full">
                 {/* Background blobs */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-200 rounded-full blur-3xl opacity-30 translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>

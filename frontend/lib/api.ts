@@ -3,9 +3,23 @@ import axios from 'axios';
 import { ExamPaper, ExamSolution, StudyPlan } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const APP_SECRET = process.env.NEXT_PUBLIC_APP_SECRET;
+
+if (!APP_SECRET) {
+    // Surface misconfiguration loudly in dev; in prod this still throws rather than
+    // shipping a well-known default secret that would nullify the shared-secret gate.
+    const msg =
+        '[api] NEXT_PUBLIC_APP_SECRET is not set. Configure it in .env.local (dev) ' +
+        'or the deployment environment before building the frontend.';
+    if (typeof window !== 'undefined') console.error(msg);
+    throw new Error(msg);
+}
 
 const api = axios.create({
     baseURL: API_URL,
+    headers: {
+        'X-App-Secret': APP_SECRET,
+    },
 });
 
 export const uploadExams = async (files: File[]): Promise<void> => {
@@ -28,6 +42,10 @@ export const getExams = async (): Promise<ExamPaper[]> => {
         solution: undefined,
         error_message: item.error_message,
     }));
+};
+
+export const retryExam = async (examId: string): Promise<void> => {
+    await api.post(`/retry/${examId}`);
 };
 
 export const getSolution = async (examId: string): Promise<ExamSolution> => {
@@ -96,6 +114,7 @@ export interface StudyGuide {
     formulas: Array<{ name: string; formula: string; description: string }>;
     common_mistakes: Array<{ mistake: string; correction: string }>;
     example_questions: Array<{ problem: string; solution: string }>;
+    point_strategy?: string;
     quickTips?: string[];
     created_at?: string;
 }
@@ -163,4 +182,20 @@ export interface ChatMessage {
 export const chatFachgespraech = async (messages: ChatMessage[], topic?: string): Promise<string> => {
     const res = await api.post('/fachgespraech', { messages, context_topic: topic });
     return res.data.content;
+};
+
+// --- Settings API ---
+
+export interface UserSettings {
+    specialization: string | null;
+}
+
+export const getSettings = async (): Promise<UserSettings> => {
+    const res = await api.get('/settings');
+    return res.data;
+};
+
+export const updateSettings = async (specialization: string): Promise<UserSettings> => {
+    const res = await api.post('/settings', { specialization });
+    return res.data;
 };

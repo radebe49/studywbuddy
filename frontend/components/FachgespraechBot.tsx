@@ -81,9 +81,9 @@ const FachgespraechBot: React.FC = () => {
     if (!isStarted) {
         return (
             <div className="h-full flex flex-col items-center justify-center p-6 animate-fade-in">
-                <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
-                    <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <GraduationCap size={40} />
+                <div className="max-w-md w-full bg-white rounded-xl border border-gray-100 p-8 text-center pt-12">
+                    <div className="w-16 h-16 bg-gray-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                        <GraduationCap size={32} strokeWidth={1.5} />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">Fachgespräch Simulator</h1>
                     <p className="text-gray-500 mb-8">
@@ -107,7 +107,7 @@ const FachgespraechBot: React.FC = () => {
                     <button
                         onClick={handleStart}
                         disabled={!selectedTopic}
-                        className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                        className="w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-50"
                     >
                         Simulation starten
                     </button>
@@ -124,9 +124,9 @@ const FachgespraechBot: React.FC = () => {
     }
 
     return (
-        <div className="h-full flex flex-col bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden animate-fade-in">
+        <div className="h-full flex flex-col bg-white rounded-xl border border-gray-100 overflow-hidden animate-fade-in">
             {/* Header */}
-            <div className="p-4 md:p-6 border-b border-gray-100 bg-white flex items-center justify-between z-10">
+            <div className="p-4 md:p-6 border-b border-gray-100 flex items-center justify-between z-10 shrink-0">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={handleReset}
@@ -160,7 +160,7 @@ const FachgespraechBot: React.FC = () => {
             {/* Chat Messages */}
             <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-gray-50/30"
+                className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-white"
             >
                 {messages.map((msg, i) => (
                     <div
@@ -211,7 +211,7 @@ const FachgespraechBot: React.FC = () => {
                             }
                         }}
                         placeholder="Ihre Antwort eingeben..."
-                        className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none min-h-[56px] max-h-32 text-sm"
+                        className="flex-1 p-4 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none min-h-[56px] max-h-32 text-sm"
                         rows={1}
                     />
                     <button

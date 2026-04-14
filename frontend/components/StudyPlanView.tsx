@@ -56,38 +56,35 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
 
     // ACTIVE STATE: Plan Exists
     return (
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden h-full flex flex-col relative animate-fade-in">
-            {/* Floating Action Button for Print */}
+        <div className="h-full flex flex-col relative animate-fade-in bg-white border border-gray-100 rounded-xl overflow-hidden">
+            {/* Action Button for Print */}
             <button
                 onClick={handlePrint}
-                className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors z-10 no-print"
+                className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 transition-colors z-10 no-print hover:bg-gray-50 rounded-md"
                 title="Als PDF exportieren"
             >
                 <Download size={20} />
             </button>
 
-            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0">
-                <div className="flex items-center gap-3 mb-2">
-                    <Calendar className="w-6 h-6" />
+            <div className="p-8 border-b border-gray-200 shrink-0">
+                <div className="flex items-center gap-3 mb-2 text-gray-900">
+                    <Calendar className="w-5 h-5 text-emerald-600" />
                     <h2 className="text-xl font-bold">{plan.title}</h2>
                 </div>
-                <p className="text-emerald-50 text-sm opacity-90 leading-relaxed pr-8">
+                <p className="text-sm text-gray-500 leading-relaxed max-w-2xl">
                     {plan.overview}
                 </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 custom-scrollbar">
-                <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div className="space-y-8 max-w-3xl mx-auto">
                     {plan.schedule.map((day, idx) => (
-                        <div key={idx} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group break-inside-avoid">
-                            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 print:bg-emerald-600"></div>
-
-                            <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                                <div className="flex-shrink-0">
-                                    <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex flex-col items-center justify-center border border-emerald-100">
-                                        <span className="text-xs font-bold uppercase">Tag</span>
-                                        <span className="text-lg font-bold">{day.day}</span>
-                                    </div>
+                        <div key={idx} className="pb-8 border-b border-gray-100 last:border-0 relative break-inside-avoid">
+                            
+                            <div className="flex flex-col md:flex-row md:items-start gap-4 mb-4">
+                                <div className="flex-shrink-0 w-12 pt-1">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Tag</div>
+                                    <div className="text-2xl font-black text-gray-900 text-center">{day.day}</div>
                                 </div>
 
                                 <div className="flex-1">
@@ -101,10 +98,10 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                                 </div>
                             </div>
 
-                            <div className="space-y-2 pl-2">
+                            <div className="space-y-3 pl-16">
                                 {day.tasks.map((task, tIdx) => (
                                     <div key={tIdx} className="flex items-start gap-3 text-sm text-gray-700">
-                                        <CheckSquare size={16} className="text-emerald-400 mt-0.5 shrink-0 print:text-black" />
+                                        <CheckSquare size={16} className="text-gray-300 mt-0.5 shrink-0" />
                                         <span>{task}</span>
                                     </div>
                                 ))}
