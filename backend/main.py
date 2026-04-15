@@ -83,8 +83,8 @@ async def get_supabase(auth: HTTPAuthorizationCredentials = Depends(security)):
         user_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         user_client.postgrest.auth(access_token)
         
-        # Verify user
-        auth_res = user_client.auth.get_user(access_token)
+        # Verify user - blocking call, run in thread
+        auth_res = await asyncio.to_thread(user_client.auth.get_user, access_token)
         if not auth_res.user:
             raise HTTPException(status_code=401, detail="Invalid session")
             
@@ -99,13 +99,14 @@ async def get_current_user(auth: HTTPAuthorizationCredentials = Body(security)):
     return user
 
 @app.get("/health")
-def health_check():
+async def health_check():
     """Check if the backend is running and connected to services."""
     status = {"status": "ok", "services": {}}
     
     # Check Supabase
     try:
-        supabase_service.table("exams").select("count", count="exact").execute()
+        # select count is blocking, run in thread
+        await asyncio.to_thread(supabase_service.table("exams").select("count", count="exact").execute)
         status["services"]["supabase"] = "connected"
     except Exception as e:
         status["services"]["supabase"] = f"error: {str(e)}"
@@ -656,8 +657,9 @@ async def upload_exam(
                 f.write(chunk)
 
         storage_path = f"exams/{user.id}/{uuid.uuid4()}_{safe_name}"
+        # Upload to Supabase Storage (blocking, run in thread)
         with open(local_path, "rb") as f:
-            supabase_service.storage.from_("exams").upload(path=storage_path, file=f)
+            await asyncio.to_thread(supabase_service.storage.from_("exams").upload, path=storage_path, file=f)
 
         exam_data = {
             "user_id": user.id,
@@ -665,7 +667,8 @@ async def upload_exam(
             "storage_path": storage_path,
             "status": "uploading",
         }
-        res = supabase.table("exams").insert(exam_data).execute()
+        # Insert into database (blocking, run in thread)
+        res = await asyncio.to_thread(supabase_service.table("exams").insert(exam_data).execute)
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to insert into DB")
 
