@@ -2,7 +2,7 @@ fastapi
 uvicorn
 supabase
 pypdf
-google-genai
+openai
 python-dotenv
 python-multipart
 pydantic

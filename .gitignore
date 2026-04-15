@@ -28,3 +28,8 @@ logs/
 # Other
 .vscode/
 sample_exam.pdf
+.cache/
+frontend/.npm_cache/
+frontend/.cache/
+testsprite_tests/
+frontend/testsprite_tests/

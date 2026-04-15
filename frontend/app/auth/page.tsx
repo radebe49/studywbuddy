@@ -53,52 +53,54 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-100 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-100 rounded-full blur-3xl opacity-50 translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>
+    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden font-sans">
+      {/* Background decoration - matching dashboard */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-200 rounded-full blur-3xl opacity-30 translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>
 
-      <div className="w-full max-w-md z-10">
-        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl shadow-purple-200/50 border border-white p-8 md:p-10">
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-purple-200 animate-slide-up">
-              <Sparkles className="text-white w-8 h-8" />
-            </div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
-              ExamPilot AI
+      <div className="w-full max-w-md z-10 animate-fade-in">
+        <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-100 p-10 md:p-12">
+          <div className="flex flex-col mb-10">
+            <h2 className="text-[10px] tracking-widest text-gray-400 uppercase mb-4 flex items-center gap-2">
+              <Sparkles size={14} className="text-purple-500" /> AUTHENTIFIZIERUNG
+            </h2>
+            <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">
+              {isSignUp ? 'Konto erstellen' : 'Willkommen'}
             </h1>
-            <p className="text-gray-500 mt-2 text-center">
-              {isSignUp ? 'Erstellen Sie ein Konto' : 'Willkommen zurück'}
+            <p className="text-gray-500 mt-3 text-sm leading-relaxed">
+              {isSignUp 
+                ? 'Beginnen Sie Ihre Reise mit präziser Prüfungsvorbereitung.' 
+                : 'Melden Sie sich an, um auf Ihre Lernmaterialien zuzugreifen.'}
             </p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-5 animate-fade-in">
+          <form onSubmit={handleAuth} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 ml-1">E-Mail Adresse</label>
+              <label className="text-[10px] tracking-widest text-gray-400 uppercase ml-1 font-semibold">E-Mail Adresse</label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-purple-600 transition-colors w-5 h-5" />
+                <Mail className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-gray-900 transition-colors w-4 h-4" />
                 <input
                   type="email"
                   placeholder="name@beispiel.de"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-600/20 focus:border-purple-600 transition-all text-gray-900"
+                  className="w-full pl-7 pr-0 py-3 bg-transparent border-b border-gray-200 focus:outline-none focus:border-gray-900 transition-all text-gray-900 placeholder:text-gray-300"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 ml-1">Passwort</label>
+              <label className="text-[10px] tracking-widest text-gray-400 uppercase ml-1 font-semibold">Passwort</label>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-purple-600 transition-colors w-5 h-5" />
+                <Lock className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-gray-900 transition-colors w-4 h-4" />
                 <input
                   type="password"
                   placeholder="••••••••"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-600/20 focus:border-purple-600 transition-all text-gray-900"
+                  className="w-full pl-7 pr-0 py-3 bg-transparent border-b border-gray-200 focus:outline-none focus:border-gray-900 transition-all text-gray-900 placeholder:text-gray-300"
                 />
               </div>
             </div>
@@ -106,23 +108,23 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-4 rounded-2xl shadow-xl shadow-purple-200 flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70 disabled:active:scale-100 mt-4 group"
+              className="w-full bg-gray-900 text-white text-sm font-medium py-4 rounded-lg hover:bg-black active:scale-[0.98] transition-all disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2 mt-6 shadow-sm"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
                   <span>{isSignUp ? 'Konto erstellen' : 'Anmelden'}</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-gray-100 text-center">
+          <div className="mt-10 pt-8 border-t border-gray-50 text-center">
             <button
               onClick={() => setIsSignUp(!isSignUp)}
-              className="text-gray-500 hover:text-purple-600 text-sm font-medium transition-colors"
+              className="text-gray-400 hover:text-gray-900 text-xs font-medium transition-colors tracking-wide"
             >
               {isSignUp 
                 ? 'Bereits ein Konto? Hier anmelden' 
@@ -131,8 +133,8 @@ export default function AuthPage() {
           </div>
         </div>
         
-        <p className="mt-8 text-center text-gray-400 text-xs">
-          Durch die Fortsetzung akzeptieren Sie unsere <br className="md:hidden" /> Nutzungsbedingungen und Datenschutzrichtlinien.
+        <p className="mt-8 text-center text-gray-300 text-[10px] tracking-wide uppercase px-4">
+          Präzision in der Ausbildung &middot; ExamPilot AI
         </p>
       </div>
     </div>

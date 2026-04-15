@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from supabase import create_client, Client
 from pypdf import PdfReader
-from google import genai
+from openai import OpenAI
 import uvicorn
 from dotenv import load_dotenv
 import uuid
@@ -27,6 +27,8 @@ load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+CHATLLM_API_KEY = os.environ.get("CHATLLM_API_KEY")
+CHATLLM_BASE_URL = os.environ.get("CHATLLM_BASE_URL")
 APP_SECRET = os.environ.get("APP_SECRET")
 ALLOWED_ORIGINS = [
     o.strip()
@@ -37,21 +39,22 @@ ALLOWED_ORIGINS = [
     if o.strip()
 ]
 
-if not all([SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY]):
-    raise ValueError("Missing environment variables: SUPABASE_URL, SUPABASE_KEY, GOOGLE_API_KEY")
+if not all([SUPABASE_URL, SUPABASE_KEY, CHATLLM_API_KEY]):
+    raise ValueError("Missing environment variables: SUPABASE_URL, SUPABASE_KEY, CHATLLM_API_KEY")
 
-# Initialize Service Client (for background tasks/initialization if needed, 
-# although we prefer authenticated clients for RLS)
+# Initialize Service Client
 supabase_service: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-client = genai.Client(api_key=GOOGLE_API_KEY)
+# Primary AI Client (RouteLLM / ChatLLM)
+client = OpenAI(api_key=CHATLLM_API_KEY, base_url=CHATLLM_BASE_URL)
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
 security = HTTPBearer()
 
-# Model Definitions (2026 Fleet)
-GEMMA_MODEL = "gemma-4-31b-it"        # High precision, German extraction
-GEMINI_MODEL = "gemini-3-flash-preview" # Large context, voice, planning
+# Model Definitions (2026 Smart Value Fleet)
+EXTRACTION_MODEL = "minimax-m2.5"     # High precision, German extraction (Value King)
+TUTOR_MODEL = "claude-sonnet-4.6"     # High-end tutor persona (Value Queen)
+PLANNING_MODEL = "deepseek-v3.2"    # Fast, effective planning
 
 # Upload limits
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))  # 25 MB default
@@ -108,11 +111,11 @@ def health_check():
         status["services"]["supabase"] = f"error: {str(e)}"
         status["status"] = "degraded"
 
-    # Check Gemini
-    if GOOGLE_API_KEY:
-        status["services"]["gemini"] = "configured"
+    # Check ChatLLM
+    if CHATLLM_API_KEY:
+        status["services"]["chatllm"] = "configured"
     else:
-        status["services"]["gemini"] = "missing_key"
+        status["services"]["chatllm"] = "missing_key"
         status["status"] = "degraded"
         
     return status
@@ -513,7 +516,7 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
         candidate_questions = pre_extract_questions(raw_text)
         candidates_json_str = json.dumps(candidate_questions, indent=2) if candidate_questions else "(None found by pre-processor)"
 
-        print(f"Calling Gemma for exam {exam_id}...")
+        print(f"Calling {EXTRACTION_MODEL} for exam {exam_id}...")
         
         full_prompt = f"""{EXAM_SYSTEM_PROMPT}
 
@@ -524,13 +527,16 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
 {raw_text[:400000]}
 """
         
-        response = client.models.generate_content(
-            model=GEMMA_MODEL,
-            contents=full_prompt,
-            config={'response_mime_type': 'application/json'}
+        response = client.chat.completions.create(
+            model=EXTRACTION_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
+                {"role": "user", "content": full_prompt}
+            ],
+            response_format={"type": "json_object"}
         )
         
-        ai_output = parse_json_from_markdown(response.text)
+        ai_output = parse_json_from_markdown(response.choices[0].message.content)
         
         # Save solution
         study_plan_data = {
@@ -774,13 +780,16 @@ async def generate_plan(request: Request, body: GeneratePlanRequest, dep: tuple 
         papers_summary += f"Subject: {p.get('subject', 'Unknown')}, Topics: {', '.join(p.get('topics', []))}, Difficulty: {p.get('difficulty', 'Unknown')}\n"
 
     try:
-        print(f"Generating plan for {user.id}...")
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=f"{PLAN_SYSTEM_PROMPT}\n\nData:\n{papers_summary}",
-            config={'response_mime_type': 'application/json'}
+        print(f"Generating plan for {user.id} using {PLANNING_MODEL}...")
+        response = client.chat.completions.create(
+            model=PLANNING_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
+                {"role": "user", "content": f"{PLAN_SYSTEM_PROMPT}\n\nData:\n{papers_summary}"}
+            ],
+            response_format={"type": "json_object"}
         )
-        plan_json = parse_json_from_markdown(response.text)
+        plan_json = parse_json_from_markdown(response.choices[0].message.content)
         
         # Add metadata
         plan_json['id'] = str(uuid.uuid4())
@@ -859,13 +868,16 @@ async def generate_study_guide(request: Request, body: Dict[str, Any], dep: tupl
         questions_context += f"Q: {q['question_text']}\nA: {q['solution']}\n\n"
 
     try:
-        print(f"Generating study guide for {topic}...")
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=STUDY_GUIDE_PROMPT.format(topic=topic, questions=questions_context),
-            config={'response_mime_type': 'application/json'}
+        print(f"Generating study guide for {topic} using {TUTOR_MODEL}...")
+        response = client.chat.completions.create(
+            model=TUTOR_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
+                {"role": "user", "content": STUDY_GUIDE_PROMPT.format(topic=topic, questions=questions_context)}
+            ],
+            response_format={"type": "json_object"}
         )
-        guide_data = parse_json_from_markdown(response.text)
+        guide_data = parse_json_from_markdown(response.choices[0].message.content)
         
         # Save to database (Syncing with updated schema)
         db_data = {
@@ -925,22 +937,19 @@ async def chat_fachgespraech(request: Request, body: FachgespraechRequest, dep: 
     supabase, user = dep
     topic = body.context_topic or "Allgemeine Elektrotechnik"
     
-    chat_history = []
-    for msg in body.messages[:-1]:
-        chat_history.append({
-            "role": "user" if msg.role == "user" else "model",
-            "parts": [{"text": msg.content}]
-        })
-
     try:
-        chat = client.chats.create(
-            model=GEMINI_MODEL,
-            config={'system_instruction': FACHGESPRAECH_SYSTEM_PROMPT.format(topic=topic)},
-            history=chat_history
+        messages = [{"role": "system", "content": FACHGESPRAECH_SYSTEM_PROMPT.format(topic=topic)}]
+        for msg in body.messages:
+            messages.append({
+                "role": "user" if msg.role == "user" else "assistant",
+                "content": msg.content
+            })
+
+        response = client.chat.completions.create(
+            model=TUTOR_MODEL,
+            messages=messages
         )
-        
-        response = chat.send_message(body.messages[-1].content)
-        return {"role": "assistant", "content": response.text}
+        return {"role": "assistant", "content": response.choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
