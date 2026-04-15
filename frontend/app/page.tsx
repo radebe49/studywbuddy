@@ -22,6 +22,16 @@ const AppContent: React.FC = () => {
     const [papers, setPapers] = useState<ExamPaper[]>([]);
     const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null);
 
+    // --- UI State (must be declared before any conditional returns per Rules of Hooks) ---
+    const [activeView, setActiveView] = useState<ViewState>('dashboard');
+    const [selectedPaperId, setSelectedPaperId] = useState<string | undefined>(undefined);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [specialization, setSpecialization] = useState<Specialization>('Infrastruktursysteme und Betriebstechnik');
+
+    // Ref mirror of papers so refreshPapers can read the latest without re-binding
+    const papersRef = React.useRef<ExamPaper[]>([]);
+
     // --- Auth Guard ---
     useEffect(() => {
         if (!loading && !user) {
@@ -29,26 +39,9 @@ const AppContent: React.FC = () => {
         }
     }, [user, loading, router]);
 
-    if (loading || !user) {
-        return (
-            <div className="h-screen w-screen flex items-center justify-center bg-white">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-gray-500 font-medium">Authentifizierung...</p>
-                </div>
-            </div>
-        );
-    }
-
-    // --- UI State ---
-    const [activeView, setActiveView] = useState<ViewState>('dashboard');
-    const [selectedPaperId, setSelectedPaperId] = useState<string | undefined>(undefined);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-    const [specialization, setSpecialization] = useState<Specialization>('Infrastruktursysteme und Betriebstechnik');
-
     // --- Persist Specialization ---
     useEffect(() => {
+        if (!user) return; // skip when not authenticated
         const fetchSettings = async () => {
             try {
                 const settings = await api.getSettings();
@@ -66,7 +59,134 @@ const AppContent: React.FC = () => {
             }
         };
         fetchSettings();
-    }, []);
+    }, [user]);
+
+    // Sync papersRef with papers state
+    useEffect(() => {
+        papersRef.current = papers;
+    }, [papers]);
+
+    // Adaptive polling: fast cadence only while an exam is actively processing,
+    // slow background cadence otherwise. Pauses entirely when the tab is hidden.
+    useEffect(() => {
+        if (!user) return; // skip polling when not authenticated
+
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let cancelled = false;
+
+        const refreshPapersInner = async () => {
+            try {
+                const list = await api.getExams();
+
+                setPapers((prev) => {
+                    const prevById = new Map(prev.map((p) => [p.id, p]));
+                    return list.map((p) => {
+                        const cached = prevById.get(p.id);
+                        if (cached?.solution && cached.status === 'completed' && p.status === 'completed') {
+                            return { ...p, solution: cached.solution };
+                        }
+                        return p;
+                    });
+                });
+
+                // Fire hydration for completed papers that don't yet have a solution cached
+                const needsSolution = list.filter(
+                    (p) => p.status === 'completed',
+                );
+                await Promise.all(
+                    needsSolution.map(async (p) => {
+                        // skip if we already have it in local state
+                        const already = papersRef.current.find((x) => x.id === p.id && x.solution);
+                        if (already) return;
+                        try {
+                            const sol = await api.getSolution(p.id);
+                            setPapers((cur) => cur.map((x) => (x.id === p.id ? { ...x, solution: sol } : x)));
+                        } catch (e) {
+                            console.error(`Failed to load solution for ${p.id}`, e);
+                        }
+                    }),
+                );
+            } catch (e) {
+                console.error('Failed to fetch exams', e);
+            }
+        };
+
+        const tick = async () => {
+            if (cancelled) return;
+            if (typeof document !== 'undefined' && document.hidden) {
+                timer = setTimeout(tick, 15000);
+                return;
+            }
+            await refreshPapersInner();
+            if (cancelled) return;
+            const hasActive = papersRef.current.some(
+                (p) => p.status === 'processing' || p.status === 'uploading',
+            );
+            timer = setTimeout(tick, hasActive ? 5000 : 30000);
+        };
+
+        tick();
+        const onVisible = () => {
+            if (!document.hidden && timer) {
+                clearTimeout(timer);
+                tick();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [user]);
+
+    // --- Loading / Auth guard return ---
+    if (loading || !user) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-white">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-gray-500 font-medium">Authentifizierung...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // --- Data Fetching (wrapper for manual refresh calls) ---
+    const refreshPapers = async () => {
+        try {
+            const list = await api.getExams();
+
+            setPapers((prev) => {
+                const prevById = new Map(prev.map((p) => [p.id, p]));
+                return list.map((p) => {
+                    const cached = prevById.get(p.id);
+                    if (cached?.solution && cached.status === 'completed' && p.status === 'completed') {
+                        return { ...p, solution: cached.solution };
+                    }
+                    return p;
+                });
+            });
+
+            const needsSolution = list.filter(
+                (p) => p.status === 'completed',
+            );
+            await Promise.all(
+                needsSolution.map(async (p) => {
+                    const already = papersRef.current.find((x) => x.id === p.id && x.solution);
+                    if (already) return;
+                    try {
+                        const sol = await api.getSolution(p.id);
+                        setPapers((cur) => cur.map((x) => (x.id === p.id ? { ...x, solution: sol } : x)));
+                    } catch (e) {
+                        console.error(`Failed to load solution for ${p.id}`, e);
+                    }
+                }),
+            );
+        } catch (e) {
+            console.error('Failed to fetch exams', e);
+        }
+    };
 
     const handleSpecializationChange = async (spec: Specialization) => {
         setSpecialization(spec);
@@ -96,87 +216,6 @@ const AppContent: React.FC = () => {
             toast("Fehler beim Löschen des Dokuments", "error");
         }
     };
-
-    // --- Data Fetching ---
-    // Only hydrate solutions for papers that newly completed; keep cached ones as-is
-    // so we stop re-downloading every solution on every poll tick.
-    const refreshPapers = async () => {
-        try {
-            const list = await api.getExams();
-
-            setPapers((prev) => {
-                const prevById = new Map(prev.map((p) => [p.id, p]));
-                return list.map((p) => {
-                    const cached = prevById.get(p.id);
-                    if (cached?.solution && cached.status === 'completed' && p.status === 'completed') {
-                        return { ...p, solution: cached.solution };
-                    }
-                    return p;
-                });
-            });
-
-            // Fire hydration for completed papers that don't yet have a solution cached
-            const needsSolution = list.filter(
-                (p) => p.status === 'completed',
-            );
-            await Promise.all(
-                needsSolution.map(async (p) => {
-                    // skip if we already have it in local state
-                    const already = papersRef.current.find((x) => x.id === p.id && x.solution);
-                    if (already) return;
-                    try {
-                        const sol = await api.getSolution(p.id);
-                        setPapers((cur) => cur.map((x) => (x.id === p.id ? { ...x, solution: sol } : x)));
-                    } catch (e) {
-                        console.error(`Failed to load solution for ${p.id}`, e);
-                    }
-                }),
-            );
-        } catch (e) {
-            console.error('Failed to fetch exams', e);
-        }
-    };
-
-    // Ref mirror of papers so refreshPapers can read the latest without re-binding
-    const papersRef = React.useRef<ExamPaper[]>([]);
-    useEffect(() => {
-        papersRef.current = papers;
-    }, [papers]);
-
-    // Adaptive polling: fast cadence only while an exam is actively processing,
-    // slow background cadence otherwise. Pauses entirely when the tab is hidden.
-    useEffect(() => {
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        let cancelled = false;
-
-        const tick = async () => {
-            if (cancelled) return;
-            if (typeof document !== 'undefined' && document.hidden) {
-                timer = setTimeout(tick, 15000);
-                return;
-            }
-            await refreshPapers();
-            if (cancelled) return;
-            const hasActive = papersRef.current.some(
-                (p) => p.status === 'processing' || p.status === 'uploading',
-            );
-            timer = setTimeout(tick, hasActive ? 5000 : 30000);
-        };
-
-        tick();
-        const onVisible = () => {
-            if (!document.hidden && timer) {
-                clearTimeout(timer);
-                tick();
-            }
-        };
-        document.addEventListener('visibilitychange', onVisible);
-        return () => {
-            cancelled = true;
-            if (timer) clearTimeout(timer);
-            document.removeEventListener('visibilitychange', onVisible);
-        };
-    }, []);
 
     // --- Action Handlers ---
 
