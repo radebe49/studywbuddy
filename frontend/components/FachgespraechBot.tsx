@@ -3,8 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, User, Bot, Loader2, RefreshCw, GraduationCap, ArrowLeft, MessageSquare, AlertCircle } from 'lucide-react';
 import { ChatMessage, chatFachgespraech, listAvailableTopics } from '../lib/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const FachgespraechBot: React.FC = () => {
+    const { t } = useLanguage();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +46,7 @@ const FachgespraechBot: React.FC = () => {
 
         const initialMessage: ChatMessage = {
             role: 'assistant',
-            content: `Guten Tag. Ich bin Ihr Prüfer für das heutige Fachgespräch zum Thema "${selectedTopic}". Bitte stellen Sie sich kurz vor oder erklären Sie mir Ihre Herangehensweise an eine technische Problemstellung in diesem Bereich.`
+            content: t('initialBotMessage', { topic: selectedTopic })
         };
 
         setMessages([initialMessage]);
@@ -67,7 +69,7 @@ const FachgespraechBot: React.FC = () => {
             console.error('Chat failed:', e);
             setMessages([...newMessages, {
                 role: 'assistant',
-                content: 'Entschuldigung, es gab ein technisches Problem. Könnten Sie das bitte noch einmal sagen?'
+                content: t('errorResponse')
             }]);
         } finally {
             setIsLoading(false);
@@ -87,13 +89,13 @@ const FachgespraechBot: React.FC = () => {
                     <div className="w-16 h-16 bg-gray-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <GraduationCap size={32} strokeWidth={1.5} />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Fachgespräch Simulator</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('botTitle')}</h1>
                     <p className="text-gray-500 mb-8">
-                        Bereiten Sie sich auf Ihren mündlichen Prüfungsteil vor. Die KI simuliert den Prüfungsausschuss und stellt vertiefende Fragen.
+                        {t('botSub')}
                     </p>
 
                     <div className="space-y-4 text-left mb-8">
-                        <label className="block text-sm font-semibold text-gray-700 ml-1">Themenbereich wählen</label>
+                        <label className="block text-sm font-semibold text-gray-700 ml-1">{t('selectTopic')}</label>
                         <select
                             value={selectedTopic}
                             onChange={(e) => setSelectedTopic(e.target.value)}
@@ -102,7 +104,7 @@ const FachgespraechBot: React.FC = () => {
                             {topics.map(t => (
                                 <option key={t} value={t}>{t}</option>
                             ))}
-                            {topics.length === 0 && <option value="">Keine Themen verfügbar</option>}
+                            {topics.length === 0 && <option value="">{t('noTopicsAvailable')}</option>}
                         </select>
                     </div>
 
@@ -111,13 +113,13 @@ const FachgespraechBot: React.FC = () => {
                         disabled={!selectedTopic}
                         className="w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-50"
                     >
-                        Simulation starten
+                        {t('startSimulation')}
                     </button>
 
                     <div className="mt-6 flex items-start gap-3 p-4 bg-amber-50 rounded-xl text-left border border-amber-100">
                         <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
                         <p className="text-xs text-amber-700">
-                            <strong>Hinweis:</strong> Der Prüfer wird versuchen, Ihre Entscheidungen zu hinterfragen. Argumentieren Sie technisch fundiert (z.B. nach VDE).
+                            <strong>{t('note')}:</strong> {t('noteContent')}
                         </p>
                     </div>
                 </div>
@@ -139,20 +141,20 @@ const FachgespraechBot: React.FC = () => {
                     <div>
                         <h2 className="font-bold text-gray-900 flex items-center gap-2">
                             <MessageSquare size={18} className="text-indigo-600" />
-                            Simulation: Fachgespräch
+                            {t('simulationFachgespraech')}
                         </h2>
-                        <p className="text-xs text-gray-500">Thema: {selectedTopic}</p>
+                        <p className="text-xs text-gray-500">{t('topic')}: {selectedTopic}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-bold ring-1 ring-green-100">
                         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        Prüfer Aktiv
+                        {t('examinerActive')}
                     </span>
                     <button
                         onClick={handleReset}
                         className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
-                        title="Simulation beenden"
+                        title={t('endSimulation')}
                     >
                         <RefreshCw size={18} />
                     </button>
@@ -193,7 +195,7 @@ const FachgespraechBot: React.FC = () => {
                             </div>
                             <div className="p-4 bg-white border border-gray-100 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
                                 <Loader2 size={16} className="animate-spin text-indigo-600" />
-                                <span className="text-xs text-gray-400 font-medium italic">Prüfer überlegt...</span>
+                                <span className="text-xs text-gray-400 font-medium italic">{t('examinerThinking')}</span>
                             </div>
                         </div>
                     </div>
@@ -212,7 +214,7 @@ const FachgespraechBot: React.FC = () => {
                                 handleSend();
                             }
                         }}
-                        placeholder="Ihre Antwort eingeben..."
+                        placeholder={t('typeAnswer')}
                         className="flex-1 p-4 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none min-h-[56px] max-h-32 text-sm"
                         rows={1}
                     />
@@ -225,7 +227,7 @@ const FachgespraechBot: React.FC = () => {
                     </button>
                 </div>
                 <p className="text-[10px] text-center text-gray-400 mt-4">
-                    Verwenden Sie technische Begriffe und begründen Sie Ihre Aussagen für ein besseres Ergebnis.
+                    {t('inputHint')}
                 </p>
             </div>
         </div>

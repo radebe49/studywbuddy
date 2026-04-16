@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ExamPaper, ViewState } from '../types';
 import { FileText, Loader2, CheckCircle, AlertCircle, Plus, LayoutDashboard, Calendar, X, Search, ChevronDown, ChevronRight, GraduationCap, Briefcase, BookOpen, Settings as SettingsIcon, MessageSquare, LogOut } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SidebarProps {
     papers: ExamPaper[];
@@ -50,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     userEmail,
     onSignOut
 }) => {
+    const { t } = useLanguage();
 
     // --- State for Search ---
     const [searchTerm, setSearchTerm] = useState('');
@@ -102,9 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {paper.name}
                 </p>
                 <p className="text-[10px] text-gray-400 truncate mt-0.5 tracking-wide">
-                    {paper.solution ? paper.solution.subject :
-                        paper.status === 'processing' ? 'Verarbeitung...' :
-                            paper.status === 'failed' ? 'Fehler' : 'Bereit'}
+                    {paper.status === 'completed' ? (paper.solution?.subject || t('ready')) : paper.status === 'processing' ? t('processing') : paper.status === 'failed' ? t('failed') : t('ready')}
                 </p>
             </div>
         </button>
@@ -139,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <h1 className="text-xl font-semibold text-gray-900 tracking-tight mb-1">
                             ExamPilot
                         </h1>
-                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">KI-Lernbegleiter</p>
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">{t('welcomeBack').replace(',', '')}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -168,27 +168,27 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                     <button onClick={() => onNavigate('dashboard')} className={getNavItemClass(activeView === 'dashboard')}>
                         <LayoutDashboard size={16} className={activeView === 'dashboard' ? 'text-indigo-600' : 'text-gray-400'} />
-                        Dashboard
+                        {t('dashboard')}
                     </button>
 
                     <button onClick={() => onNavigate('study-plan')} className={getNavItemClass(activeView === 'study-plan')}>
                         <Calendar size={16} className={activeView === 'study-plan' ? 'text-indigo-600' : 'text-gray-400'} />
-                        Lernplan
+                        {t('learningPath')}
                     </button>
 
                     <button onClick={() => onNavigate('study-guides')} className={getNavItemClass(activeView === 'study-guides')}>
                         <BookOpen size={16} className={activeView === 'study-guides' ? 'text-indigo-600' : 'text-gray-400'} />
-                        Lernleitfäden
+                        {t('studyGuides')}
                     </button>
 
                     <button onClick={() => onNavigate('fachgespraech')} className={getNavItemClass(activeView === 'fachgespraech')}>
                         <MessageSquare size={16} className={activeView === 'fachgespraech' ? 'text-indigo-600' : 'text-gray-400'} />
-                        Fachgespräch Bot
+                        {t('fachgespraech')}
                     </button>
 
                     <button onClick={() => onNavigate('settings')} className={getNavItemClass(activeView === 'settings')}>
                         <SettingsIcon size={16} className={activeView === 'settings' ? 'text-indigo-600' : 'text-gray-400'} />
-                        Profil & Setup
+                        {t('settings')}
                     </button>
 
                     <div className="pt-4 pb-2 px-2">
@@ -196,7 +196,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onClick={onImportClick}
                             className="w-full py-2.5 text-xs bg-gray-900 hover:bg-black text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
-                            <Plus size={14} /> Importieren
+                            <Plus size={14} /> {t('uploadExams')}
                         </button>
                     </div>
                 </div>
@@ -274,7 +274,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         onClick={onSignOut}
                         className="w-full py-2.5 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2 active:scale-95"
                     >
-                        <LogOut size={14} /> Abmelden
+                        <LogOut size={14} /> {t('logout')}
                     </button>
                     <div className="pt-2">
                         <p className="text-[10px] font-medium tracking-widest text-gray-300 uppercase">v2.1 • Multi-User Secure</p>

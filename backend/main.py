@@ -34,7 +34,7 @@ ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "ALLOWED_ORIGINS",
-        "https://studywbuddy.vercel.app,http://localhost:3000",
+        "https://studywbuddy.vercel.app,http://localhost:3000,http://127.0.0.1:3000",
     ).split(",")
     if o.strip()
 ]
@@ -42,8 +42,9 @@ ALLOWED_ORIGINS = [
 if not all([SUPABASE_URL, SUPABASE_KEY, CHATLLM_API_KEY]):
     raise ValueError("Missing environment variables: SUPABASE_URL, SUPABASE_KEY, CHATLLM_API_KEY")
 
-# Initialize Service Client
-supabase_service: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialize Service Client (Use Service Role Key if available, otherwise fallback to Anon)
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_KEY)
+supabase_service: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 # Primary AI Client (RouteLLM / ChatLLM)
 client = OpenAI(api_key=CHATLLM_API_KEY, base_url=CHATLLM_BASE_URL)
 
@@ -52,9 +53,9 @@ limiter = Limiter(key_func=get_remote_address)
 security = HTTPBearer()
 
 # Model Definitions (2026 Smart Value Fleet)
-EXTRACTION_MODEL = "minimax-m2.5"     # High precision, German extraction (Value King)
-TUTOR_MODEL = "claude-sonnet-4.6"     # High-end tutor persona (Value Queen)
-PLANNING_MODEL = "deepseek-v3.2"    # Fast, effective planning
+EXTRACTION_MODEL = "claude-sonnet-4-5"  # High precision, reliable JSON extraction
+TUTOR_MODEL = "claude-sonnet-4-6"       # High-end tutor persona
+PLANNING_MODEL = "deepseek-v3.2"        # Fast, effective planning
 
 # Upload limits
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))  # 25 MB default
@@ -69,8 +70,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"], # Drop X-App-Secret
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # Authentication & Supabase Client Dependency
@@ -82,20 +83,22 @@ async def get_supabase(auth: HTTPAuthorizationCredentials = Depends(security)):
         # This client is local to the request and respects RLS
         user_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         user_client.postgrest.auth(access_token)
+        # Also set it for other services like Storage
+        user_client.options.headers["Authorization"] = f"Bearer {access_token}"
         
         # Verify user - blocking call, run in thread
         auth_res = await asyncio.to_thread(user_client.auth.get_user, access_token)
         if not auth_res.user:
             raise HTTPException(status_code=401, detail="Invalid session")
             
-        return user_client, auth_res.user
+        return user_client, auth_res.user, access_token
     except Exception as e:
         print(f"Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Dependency for routes that need auth but not necessarily the client
 async def get_current_user(auth: HTTPAuthorizationCredentials = Body(security)):
-    _, user = await get_supabase(auth)
+    _, user, _ = await get_supabase(auth)
     return user
 
 @app.get("/health")
@@ -124,26 +127,37 @@ async def health_check():
 @app.get("/settings")
 def get_user_settings(dep: tuple = Depends(get_supabase)):
     """Get the current user specialization."""
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("user_settings").select("*").execute()
     if res.data:
         return res.data[0]
     return {"specialization": None}
 
 class UpdateSettingsRequest(BaseModel):
-    specialization: str
+    specialization: Optional[str] = None
+    language: Optional[str] = None
 
 @app.post("/settings")
 def update_user_settings(request: UpdateSettingsRequest, dep: tuple = Depends(get_supabase)):
-    """Update the current user specialization."""
-    supabase, user = dep
-    data = {
-        "user_id": user.id,
-        "specialization": request.specialization
-    }
-    # Upsert using RLS
-    res = supabase.table("user_settings").upsert(data).execute()
-    return res.data[0]
+    """Update the current user settings (specialization and/or language)."""
+    supabase, user, _ = dep
+    data = {"user_id": user.id}
+    if request.specialization is not None:
+        data["specialization"] = request.specialization
+    if request.language is not None:
+        data["language"] = request.language
+        
+    try:
+        # Upsert using RLS
+        res = supabase.table("user_settings").upsert(data, on_conflict="user_id").execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+        # If no data returned (e.g. RLS mismatch), return the data we tried to set as fallback
+        return data
+    except Exception as e:
+        print(f"Error updating settings: {e}")
+        # Return what we have so far instead of crashing
+        return data
 
 @app.post("/maintenance/timeout-sweep")
 def timeout_sweep():
@@ -502,10 +516,10 @@ Output valid JSON matching this schema:
 
 # --- Background Task ---
 
-# --- Background Task ---
-
-def process_exam_background(exam_id: str, file_path: str, user_id: str):
+def process_exam_background(exam_id: str, file_path: str, user_id: str, access_token: str):
+    """Background task to process the uploaded PDF using AI."""
     print(f"Processing exam {exam_id} for user {user_id}...")
+    # Use the service client (bypasses RLS for the processing state)
     supabase_service.table("exams").update({"status": "processing"}).eq("id", exam_id).execute()
 
     try:
@@ -531,10 +545,9 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
         response = client.chat.completions.create(
             model=EXTRACTION_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
+                {"role": "system", "content": "You are a helpful tutor that extraction information into clean JSON. Your response must be ONLY the JSON object, no conversational text."},
                 {"role": "user", "content": full_prompt}
-            ],
-            response_format={"type": "json_object"}
+            ]
         )
         
         ai_output = parse_json_from_markdown(response.choices[0].message.content)
@@ -547,7 +560,9 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
             "markdown_plan": ai_output.get("summary", "Processed successfully")
         }
         
-        supabase_service.table("study_plans").upsert(study_plan_data, on_conflict="exam_id").execute()
+        # Delete-then-insert avoids relying on a UNIQUE(exam_id) constraint that may not exist in older DBs.
+        supabase_service.table("study_plans").delete().eq("exam_id", exam_id).execute()
+        supabase_service.table("study_plans").insert(study_plan_data).execute()
 
         # Get specialization from settings
         settings_res = supabase_service.table("user_settings").select("specialization").eq("user_id", user_id).execute()
@@ -560,6 +575,10 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
             "handlungsbereich": ai_output.get("handlungsbereich"),
             "specialization": user_specialization
         }).eq("id", exam_id).execute()
+
+        # Clear any prior scenarios/questions so retries are idempotent
+        supabase_service.table("questions").delete().eq("exam_id", exam_id).execute()
+        supabase_service.table("scenarios").delete().eq("exam_id", exam_id).execute()
 
         # Save Scenarios
         scenario_map = {}
@@ -593,8 +612,12 @@ def process_exam_background(exam_id: str, file_path: str, user_id: str):
                 "points_breakdown": ai_q.get("points", {}).get("breakdown")
             }
             supabase_service.table("questions").insert(q_data).execute()
+        
+        print(f"Exam {exam_id} processed successfully.")
             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         error_msg = str(e)
         if "429" in error_msg:
             error_msg = "KI-Nutzungslimit überschritten (Quote). Bitte versuchen Sie es später erneut."
@@ -625,11 +648,11 @@ def _safe_filename(name: Optional[str]) -> str:
 @limiter.limit("10/hour")
 async def upload_exam(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
-    background_tasks: BackgroundTasks = None,
     dep: tuple = Depends(get_supabase)
 ):
-    supabase, user = dep
+    supabase, user, access_token = dep
     declared_ct = (file.content_type or "").lower()
     if declared_ct and declared_ct not in ("application/pdf", "application/x-pdf"):
         raise HTTPException(status_code=415, detail="Nur PDF-Dateien werden unterstützt.")
@@ -659,7 +682,7 @@ async def upload_exam(
         storage_path = f"exams/{user.id}/{uuid.uuid4()}_{safe_name}"
         # Upload to Supabase Storage (blocking, run in thread)
         with open(local_path, "rb") as f:
-            await asyncio.to_thread(supabase_service.storage.from_("exams").upload, path=storage_path, file=f)
+            await asyncio.to_thread(supabase.storage.from_("exams").upload, path=storage_path, file=f)
 
         exam_data = {
             "user_id": user.id,
@@ -668,12 +691,12 @@ async def upload_exam(
             "status": "uploading",
         }
         # Insert into database (blocking, run in thread)
-        res = await asyncio.to_thread(supabase_service.table("exams").insert(exam_data).execute)
+        res = await asyncio.to_thread(supabase.table("exams").insert(exam_data).execute)
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to insert into DB")
 
         exam_id = res.data[0]["id"]
-        background_tasks.add_task(process_exam_background, exam_id, local_path, user.id)
+        background_tasks.add_task(process_exam_background, exam_id, local_path, user.id, access_token)
 
         return {"message": "Upload successful", "exam_id": exam_id}
     except Exception as e:
@@ -684,13 +707,13 @@ async def upload_exam(
 
 @app.get("/exams")
 def list_exams(dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("exams").select("*").order("upload_date", desc=True).execute()
     return res.data
 
 @app.post("/retry/{exam_id}")
 async def retry_exam(exam_id: str, background_tasks: BackgroundTasks, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, access_token = dep
     res = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -704,19 +727,19 @@ async def retry_exam(exam_id: str, background_tasks: BackgroundTasks, dep: tuple
     local_path = f"temp/retry_{uuid.uuid4()}_{exam['filename']}"
     try:
         # Download in thread to avoid blocking event loop
-        content = await asyncio.to_thread(supabase_service.storage.from_("exams").download, storage_path)
+        content = await asyncio.to_thread(supabase.storage.from_("exams").download, storage_path)
         with open(local_path, "wb+") as f:
             f.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download: {e}")
 
     supabase.table("exams").update({"status": "processing", "error_message": None}).eq("id", exam_id).execute()
-    background_tasks.add_task(process_exam_background, exam_id, local_path, user.id)
+    background_tasks.add_task(process_exam_background, exam_id, local_path, user.id, access_token)
     return {"message": "Retry started", "exam_id": exam_id}
 
 @app.get("/solutions/{exam_id}")
 def get_solution(exam_id: str, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     exam_res = supabase.table("exams").select("*").eq("id", exam_id).execute()
     if not exam_res.data:
         raise HTTPException(status_code=404, detail="Exam not found or no access")
@@ -777,7 +800,7 @@ def get_solution(exam_id: str, dep: tuple = Depends(get_supabase)):
 @app.post("/generate-plan")
 @limiter.limit("5/hour")
 async def generate_plan(request: Request, body: GeneratePlanRequest, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     papers_summary = ""
     for p in body.exam_solutions:
         papers_summary += f"Subject: {p.get('subject', 'Unknown')}, Topics: {', '.join(p.get('topics', []))}, Difficulty: {p.get('difficulty', 'Unknown')}\n"
@@ -815,7 +838,7 @@ class PracticeSessionCreate(BaseModel):
 
 @app.post("/progress/sessions")
 def save_practice_session(session: Dict[str, Any], dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     session["user_id"] = user.id
     res = supabase.table("practice_sessions").insert(session).execute()
     if not res.data:
@@ -824,7 +847,7 @@ def save_practice_session(session: Dict[str, Any], dep: tuple = Depends(get_supa
 
 @app.get("/progress")
 def get_progress(dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     # RLS ensures we only get our own sessions
     res = supabase.table("practice_sessions").select("*").order("session_date", desc=True).execute()
     sessions = res.data or []
@@ -840,7 +863,7 @@ def get_progress(dep: tuple = Depends(get_supabase)):
 
 @app.get("/progress/exam/{exam_id}")
 def get_exam_progress(exam_id: str, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("practice_sessions").select("*").eq("exam_id", exam_id).order("session_date", desc=True).execute()
     return res.data or []
 
@@ -848,7 +871,7 @@ def get_exam_progress(exam_id: str, dep: tuple = Depends(get_supabase)):
 
 @app.get("/topics")
 def list_available_topics(dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("questions").select("topic").execute()
     topics = sorted(list(set(q["topic"] for q in res.data if q.get("topic"))))
     return topics
@@ -856,7 +879,7 @@ def list_available_topics(dep: tuple = Depends(get_supabase)):
 @app.post("/study-guides/generate")
 @limiter.limit("10/hour")
 async def generate_study_guide(request: Request, body: Dict[str, Any], dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     topic = body.get("topic")
     if not topic:
         raise HTTPException(status_code=400, detail="Topic required")
@@ -902,13 +925,13 @@ async def generate_study_guide(request: Request, body: Dict[str, Any], dep: tupl
 
 @app.get("/study-guides")
 def list_study_guides(dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("topic_summaries").select("id, topic, subject, created_at").order("updated_at", desc=True).execute()
     return res.data or []
 
 @app.get("/study-guides/{id}")
 def get_study_guide(id: str, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     res = supabase.table("topic_summaries").select("*").eq("id", id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Guide not found")
@@ -916,7 +939,7 @@ def get_study_guide(id: str, dep: tuple = Depends(get_supabase)):
 
 @app.delete("/exams/{exam_id}")
 async def delete_exam(exam_id: str, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     # 1. Verify existence/access
     res = supabase.table("exams").select("storage_path").eq("id", exam_id).single().execute()
     if not res.data:
@@ -929,15 +952,22 @@ async def delete_exam(exam_id: str, dep: tuple = Depends(get_supabase)):
     
     # 3. Storage cleanup (service key needed for storage delete usually if owner check is complex)
     try:
-        supabase_service.storage.from_("exams").remove([storage_path])
+        supabase.storage.from_("exams").remove([storage_path])
     except: pass
     
     return {"message": "Deleted successfully"}
 
+@app.delete("/study-guides/{id}")
+async def delete_study_guide(id: str, dep: tuple = Depends(get_supabase)):
+    supabase, user, _ = dep
+    # This will delete the topic summary. RLS ensures user only deletes their own.
+    supabase.table("topic_summaries").delete().eq("id", id).execute()
+    return {"message": "Study guide deleted"}
+
 @app.post("/fachgespraech")
 @limiter.limit("30/hour")
 async def chat_fachgespraech(request: Request, body: FachgespraechRequest, dep: tuple = Depends(get_supabase)):
-    supabase, user = dep
+    supabase, user, _ = dep
     topic = body.context_topic or "Allgemeine Elektrotechnik"
     
     try:

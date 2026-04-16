@@ -9,15 +9,19 @@ import StudyPlanView from '../components/StudyPlanView';
 import StudyGuides from '../components/StudyGuides';
 import Settings from '../components/Settings';
 import FachgespraechBot from '../components/FachgespraechBot';
+import SmartLoadingOverlay from '../components/SmartLoadingOverlay';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../components/Toast';
+import { useLanguage } from '../context/LanguageContext';
 import { LogOut, Menu } from 'lucide-react';
 import * as api from '../lib/api';
+import { Language } from '../lib/translations';
 
 const AppContent: React.FC = () => {
     const { toast } = useToast();
     const { user, loading, signOut } = useAuth();
+    const { language, setLanguage } = useLanguage();
     const router = useRouter();
     const [papers, setPapers] = useState<ExamPaper[]>([]);
     const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null);
@@ -27,7 +31,14 @@ const AppContent: React.FC = () => {
     const [selectedPaperId, setSelectedPaperId] = useState<string | undefined>(undefined);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [isExtracting, setIsExtracting] = useState(false);
     const [specialization, setSpecialization] = useState<Specialization>('Infrastruktursysteme und Betriebstechnik');
+
+    const extractionSteps: any[] = [
+        'stepQuestions',
+        'stepConcepts',
+        'stepFinalizing'
+    ];
 
     // Ref mirror of papers so refreshPapers can read the latest without re-binding
     const papersRef = React.useRef<ExamPaper[]>([]);
@@ -39,12 +50,14 @@ const AppContent: React.FC = () => {
         }
     }, [user, loading, router]);
 
-    // --- Persist Specialization ---
+    // --- Persist Settings (Specialization & Language) ---
     useEffect(() => {
-        if (!user) return; // skip when not authenticated
+        if (!user) return;
         const fetchSettings = async () => {
             try {
                 const settings = await api.getSettings();
+                
+                // Handle Specialization
                 if (settings.specialization) {
                     setSpecialization(settings.specialization as Specialization);
                     localStorage.setItem('user_specialization', settings.specialization);
@@ -52,14 +65,36 @@ const AppContent: React.FC = () => {
                     const saved = localStorage.getItem('user_specialization') as Specialization;
                     if (saved) setSpecialization(saved);
                 }
+
+                // Handle Language
+                if (settings.language) {
+                    setLanguage(settings.language as Language);
+                }
             } catch (e) {
                 console.error("Failed to fetch settings", e);
-                const saved = localStorage.getItem('user_specialization') as Specialization;
-                if (saved) setSpecialization(saved);
+                const savedSpec = localStorage.getItem('user_specialization') as Specialization;
+                if (savedSpec) setSpecialization(savedSpec);
+                
+                const savedLang = localStorage.getItem('ui-language') as Language;
+                if (savedLang) setLanguage(savedLang);
             }
         };
         fetchSettings();
-    }, [user]);
+    }, [user, setLanguage]);
+
+    // Update backend when language changes (if it differs from what's likely on server)
+    useEffect(() => {
+        if (!user || loading) return;
+        const syncLanguage = async () => {
+            try {
+                // This is a bit of a "silent" update to keep backend in sync with local storage/UI choice
+                await api.updateSettings(undefined, language);
+            } catch (e) {
+                console.error("Failed to sync language to backend", e);
+            }
+        };
+        syncLanguage();
+    }, [language, user, loading]);
 
     // Sync papersRef with papers state
     useEffect(() => {
@@ -192,10 +227,10 @@ const AppContent: React.FC = () => {
         setSpecialization(spec);
         localStorage.setItem('user_specialization', spec);
         try {
-            await api.updateSettings(spec);
+            await api.updateSettings(spec, language);
         } catch (e) {
-            console.error('Failed to start extraction', e);
-            toast("Upload fehlgeschlagen", "error");
+            console.error('Failed to update settings', e);
+            toast("Änderung fehlgeschlagen", "error");
         }
     };
 
@@ -220,11 +255,17 @@ const AppContent: React.FC = () => {
     // --- Action Handlers ---
 
     const handleFileUpload = async (files: File[]) => {
-        // Optimistic UI updates could be added here, but we rely on polling/refresh for now
         try {
+            setIsExtracting(true);
             await api.uploadExams(files);
             await refreshPapers(); // Immediate refresh
+            
+            // We keep it visible for a bit to show progress even if upload was fast
+            setTimeout(() => {
+                setIsExtracting(false);
+            }, 5000);
         } catch (e) {
+            setIsExtracting(false);
             toast("Upload fehlgeschlagen", "error");
         }
     };
@@ -286,6 +327,7 @@ const AppContent: React.FC = () => {
                         paper={paper}
                         onClose={() => handleNavigate('dashboard')}
                         specialization={specialization}
+                        onSpecializationChange={handleSpecializationChange}
                     />
                 );
             }
@@ -329,6 +371,7 @@ const AppContent: React.FC = () => {
                 onRetryPaper={handleRetryPaper}
                 onGeneratePlan={handleCreateStudyPlan}
                 onNavigateToPlan={() => handleNavigate('study-plan')}
+                onDeletePaper={handleDeletePaper}
                 specialization={specialization}
                 onNavigateToSettings={() => handleNavigate('settings')}
             />
@@ -336,7 +379,12 @@ const AppContent: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-white overflow-hidden font-sans text-gray-900">
+        <div className="flex h-screen bg-white overflow-hidden font-sans text-gray-900 relative">
+            <SmartLoadingOverlay 
+                titleKey="processingAI" 
+                steps={extractionSteps} 
+                isProcessing={isExtracting} 
+            />
             <Sidebar
                 papers={papers}
                 activeView={activeView}

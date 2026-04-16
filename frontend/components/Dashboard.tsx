@@ -23,6 +23,7 @@ import {
     RefreshCw,
     Trash2
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DashboardProps {
     papers: ExamPaper[];
@@ -49,6 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     specialization,
     onNavigateToSettings
 }) => {
+    const { t } = useLanguage();
     // --- Progress Tracking State ---
     const [progress, setProgress] = useState<ProgressData>({ sessions: [], questionsMastered: 0, questionsAttempted: 0 });
 
@@ -123,11 +125,11 @@ const Dashboard: React.FC<DashboardProps> = ({
             {/* Header section (Action-led) */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-16">
                 <div>
-                    <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Übersicht</h1>
+                    <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Dashboard</h1>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[10px] font-medium tracking-widest uppercase text-gray-400">
-                        {stats.papersThisWeek > 0 && <span>{stats.papersThisWeek} Uploads diese Woche</span>}
-                        {progressMetrics.masteryRate > 0 && <span>{progressMetrics.masteryRate}% Genauigkeit</span>}
-                        {progressMetrics.streak > 0 && <span className="flex items-center gap-1 text-orange-500"><Flame size={12}/>{progressMetrics.streak} Tage Strähne</span>}
+                        {stats.papersThisWeek > 0 && <span>{stats.papersThisWeek} Uploads</span>}
+                        {progressMetrics.masteryRate > 0 && <span>{progressMetrics.masteryRate}% {t('statsMastered')}</span>}
+                        {progressMetrics.streak > 0 && <span className="flex items-center gap-1 text-orange-500"><Flame size={12}/>{progressMetrics.streak} {t('statsStudyTime')}</span>}
                         {specialization !== 'None' && <span>HQ: {specialization}</span>}
                     </div>
                 </div>
@@ -137,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-all active:scale-95 border border-transparent shadow-sm"
                 >
                     <Plus size={16} />
-                    Arbeit Hochladen
+                    {t('uploadExams')}
                     <input
                         type="file"
                         id="fileInput"
@@ -162,14 +164,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                     
                     <section>
                         <h2 className="text-[10px] tracking-widest text-gray-400 uppercase mb-6 flex items-center gap-2">
-                            <Target size={14}/> Heutiger Fokus
+                            <Target size={14}/> {t('todaysFocus')}
                         </h2>
                         
                         {studyPlan && todaysTasks ? (
                             <div className="space-y-6">
                                 <div className="flex justify-between items-baseline mb-4">
                                     <h3 className="text-2xl font-medium text-gray-900">{todaysTasks.focus}</h3>
-                                    <button onClick={onNavigateToPlan} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">Voller Plan</button>
+                                    <button onClick={onNavigateToPlan} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">{t('fullPlan')}</button>
                                 </div>
                                 <div className="space-y-5">
                                     {todaysTasks.tasks.map((task, i) => (
@@ -180,19 +182,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     ))}
                                 </div>
                                 <div className="flex items-center gap-6 text-[10px] font-medium tracking-widest text-gray-400 uppercase pt-6">
-                                    <span className="flex items-center gap-1.5"><Clock size={12}/> {todaysTasks.durationMinutes} Min</span>
-                                    <span>Tag {todaysTasks.day}</span>
+                                    <span className="flex items-center gap-1.5"><Clock size={12}/> {todaysTasks.durationMinutes} {t('min')}</span>
+                                    <span>{t('day')} {todaysTasks.day}</span>
                                 </div>
                             </div>
                         ) : (
                             <div className="flex flex-col items-start gap-4">
-                                <p className="text-gray-500 text-base">Sie haben derzeit keinen aktiven Lernplan.</p>
+                                <p className="text-gray-500 text-base">{t('noActivePlan')}</p>
                                 {stats.solvedCount > 0 ? (
                                     <button onClick={onGeneratePlan} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mt-2">
-                                        Plan generieren <ArrowUpRight size={14}/>
+                                        {t('generatePlan')} <ArrowUpRight size={14}/>
                                     </button>
                                 ) : (
-                                    <span className="text-sm text-gray-400 mt-2">Laden Sie eine Prüfung hoch, um zu beginnen.</span>
+                                    <span className="text-sm text-gray-400 mt-2">{t('uploadToStart')}</span>
                                 )}
                             </div>
                         )}
@@ -204,11 +206,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                     
                     <section>
                         <h2 className="text-[10px] tracking-widest text-gray-400 uppercase mb-6 flex items-center gap-2">
-                            <Clock size={14}/> Neueste Dokumente
+                            <Clock size={14}/> {t('recentExams')}
                         </h2>
                         
                         {papers.length === 0 ? (
-                            <p className="text-gray-400 text-sm">Noch keine Arbeiten hochgeladen.</p>
+                            <p className="text-gray-400 text-sm">{t('noExamsUploaded')}</p>
                         ) : (
                             <div className="space-y-6">
                                 {papers.slice().reverse().slice(0, 5).map(paper => (
@@ -218,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                                 {paper.name}
                                             </p>
                                             <p className={`text-xs mt-1 ${paper.status === 'failed' ? 'text-red-500' : 'text-gray-400'}`}>
-                                                {paper.status === 'completed' ? paper.solution?.subject : paper.status === 'failed' ? 'Fehler bei der Analyse' : 'Verarbeitung...'}
+                                                {paper.status === 'completed' ? paper.solution?.subject : paper.status === 'failed' ? t('failed') : t('processing')}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-3 pt-1 shrink-0">
@@ -253,7 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {stats.uniqueTopics > 0 && (
                         <section>
                             <h2 className="text-[10px] tracking-widest text-gray-400 uppercase mb-6 flex items-center gap-2">
-                                <Brain size={14}/> Wissensbasis
+                                <Brain size={14}/> {t('knowledgeBase')}
                             </h2>
                             <div className="flex flex-wrap gap-2">
                                 {Array.from(new Set(papers.flatMap(p => p.solution?.topics || []))).slice(0, 8).map((t, i) => (

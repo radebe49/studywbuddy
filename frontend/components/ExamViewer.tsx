@@ -4,16 +4,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ExamPaper, QuestionAnalysis, Specialization } from '../types';
 import {
     BookOpen, CheckCircle, BrainCircuit, BarChart3, Clock, ChevronLeft,
-    Download, Printer, RefreshCw, XCircle, ChevronRight, Trophy, AlertCircle
+    Download, Printer, RefreshCw, XCircle, ChevronRight, Trophy, AlertCircle, Sparkles, CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { savePracticeSession as saveToAPI, getProgress as fetchProgressFromAPI, ProgressData, PracticeSessionFromAPI } from '../lib/api';
 import { useToast } from './Toast';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ExamViewerProps {
     paper: ExamPaper;
     onClose: () => void;
     specialization: Specialization;
+    onSpecializationChange?: (spec: Specialization) => void;
 }
 
 type Mode = 'review' | 'practice';
@@ -41,8 +43,9 @@ export const loadProgress = async (): Promise<ProgressData> => {
     }
 };
 
-const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization }) => {
+const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization, onSpecializationChange }) => {
     const { toast } = useToast();
+    const { t } = useLanguage();
     const [mode, setMode] = useState<Mode>('review');
     const [practiceStats, setPracticeStats] = useState<Record<number, QuestionStatus>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -53,35 +56,39 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
 
     if (!paper.solution) return null;
 
-    // --- Specialization Filtering ---
-    const filteredQuestions = useMemo(() => {
+    // --- Smart Specialization Detection ---
+    const getFilteredQuestions = (spec: Specialization) => {
         const allQuestions = paper.solution?.questions || [];
-        
-        // Only filter for HQ Technik
         if (paper.solution?.qualificationArea === 'HQ' && paper.solution?.handlungsbereich === 'Technik') {
             return allQuestions.filter(q => {
                 const topic = (q.topic || '').toLowerCase();
                 const text = (q.questionText || '').toLowerCase();
-                
-                // Heuristic filtering for legacy and new data
-                if (specialization === 'Infrastruktursysteme und Betriebstechnik') {
-                    // Hide questions clearly meant for AIT
-                    if (topic.includes('automatisierung') || text.includes('sps-programm') || text.includes('ait-spezifisch')) {
-                        return false;
-                    }
+                if (spec === 'Infrastruktursysteme und Betriebstechnik') {
+                    if (topic.includes('automatisierung') || text.includes('sps-programm') || text.includes('ait-spezifisch')) return false;
                 }
-                if (specialization === 'Automatisierungs- und Informationstechnik') {
-                    // Hide questions clearly meant for IBT
-                    if (topic.includes('infrastruktur') || text.includes('energieversorgung') || text.includes('obt-spezifisch')) {
-                        return false;
-                    }
+                if (spec === 'Automatisierungs- und Informationstechnik') {
+                    if (topic.includes('infrastruktur') || text.includes('energieversorgung') || text.includes('obt-spezifisch')) return false;
                 }
                 return true;
             });
         }
-        
         return allQuestions;
-    }, [paper.solution?.questions, paper.solution?.qualificationArea, paper.solution?.handlungsbereich, specialization]);
+    };
+
+    const filteredQuestions = useMemo(() => getFilteredQuestions(specialization), [paper.solution?.questions, paper.solution?.qualificationArea, paper.solution?.handlungsbereich, specialization]);
+
+    const recommendation = useMemo(() => {
+        if (filteredQuestions.length === 0) {
+            const alternateSpec: Specialization = specialization === 'Infrastruktursysteme und Betriebstechnik' 
+                ? 'Automatisierungs- und Informationstechnik' 
+                : 'Infrastruktursysteme und Betriebstechnik';
+            const alternateQuestions = getFilteredQuestions(alternateSpec);
+            if (alternateQuestions.length > 0) {
+                return alternateSpec;
+            }
+        }
+        return null;
+    }, [filteredQuestions, specialization]);
 
     const questions = filteredQuestions;
     const totalQuestions = questions.length;
@@ -134,7 +141,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
             spread: 100,
             origin: { y: 0.6 }
         });
-        toast(`Prüfung abgeschlossen! Sie haben ${scorePercentage}% erreicht.`, "success");
+        toast(`${t('examFinished')}! ${t('score')}: ${scorePercentage}%`, "success");
     };
 
     const handleAnswer = (status: QuestionStatus) => {
@@ -228,14 +235,14 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
                                 className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200 hidden md:flex"
                             >
                                 <Download size={16} />
-                                Exportieren
+                                {t('export')}
                             </button>
                             <button
                                 onClick={startPractice}
                                 className="flex-1 md:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                             >
                                 <BrainCircuit size={18} />
-                                {isTimeTrial ? 'Prüfung simulieren' : 'Übung beginnen'}
+                                {isTimeTrial ? t('simulateExam') : t('startPractice')}
                             </button>
                         </>
                     ) : (
@@ -247,25 +254,25 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
                                 </div>
                             )}
                             <div className="text-right hidden md:block">
-                                <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Fortschritt</div>
+                                <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">{t('progress')}</div>
                                 <div className="text-sm font-bold text-gray-700">{currentQuestionIndex + 1} / {totalQuestions}</div>
                             </div>
                             <button
                                 onClick={() => {
-                                    if (isTimeTrial && !confirm('Simulation wirklich abbrechen? Ihr Fortschritt wird nicht gespeichert.')) return;
+                                    if (isTimeTrial && !confirm(t('confirmAbort'))) return;
                                     setMode('review');
                                     setIsTimerRunning(false);
                                 }}
                                 className="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
                             >
-                                {isTimeTrial ? 'Abbrechen' : 'Beenden'}
+                                {isTimeTrial ? t('abort') : t('finish')}
                             </button>
                             {isTimeTrial && (
                                 <button
                                     onClick={handleFinishExam}
                                     className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-all"
                                 >
-                                    Abgeben
+                                    {t('submit')}
                                 </button>
                             )}
                         </div>
@@ -275,29 +282,74 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
 
             {/* Content Area */}
             <div className="flex-1 overflow-hidden bg-white relative">
+                {recommendation && (
+                    <div className="absolute inset-x-0 top-0 z-20 p-4 bg-amber-50 border-b border-amber-100 animate-slide-down">
+                        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 text-amber-800">
+                                <div className="p-2 bg-amber-100 rounded-lg">
+                                    <Sparkles size={18} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold">{t('smartRecommendation')}</p>
+                                    <p className="text-xs opacity-90">{t('optimizedFor', { spec: recommendation })}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => onSpecializationChange?.(recommendation)}
+                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                            >
+                                {t('switchNow')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {mode === 'review' ? (
                     <ReviewModeView questions={questions} paper={paper} />
                 ) : (
                     <div className="h-full overflow-y-auto custom-scrollbar p-6 flex flex-col items-center">
                         <div className="w-full max-w-3xl">
-                            {/* Progress Bar */}
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-8 overflow-hidden">
-                                <div
-                                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-                                    style={{ width: `${((currentQuestionIndex) / totalQuestions) * 100}%` }}
-                                ></div>
-                            </div>
+                            {totalQuestions === 0 ? (
+                                <div className="mt-20 text-center animate-fade-in">
+                                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
+                                        <AlertCircle size={40} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{t('noQuestions')}</h3>
+                                    <p className="text-gray-500 max-w-sm mx-auto leading-relaxed">
+                                        {t('noQuestionsFound')} ({specialization})
+                                    </p>
+                                    {recommendation && (
+                                        <button
+                                            onClick={() => onSpecializationChange?.(recommendation)}
+                                            className="mt-8 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center gap-2 mx-auto"
+                                        >
+                                            {t('switchNow')}
+                                            <ChevronRight size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Progress Bar */}
+                                    <div className="w-full bg-gray-200 rounded-full h-1.5 mb-8 overflow-hidden">
+                                        <div
+                                            className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500 ease-out"
+                                            style={{ width: `${((currentQuestionIndex) / totalQuestions) * 100}%` }}
+                                        ></div>
+                                    </div>
 
-                            <PracticeCard
-                                question={questions[currentQuestionIndex]}
-                                index={currentQuestionIndex}
-                                total={totalQuestions}
-                                onResult={handleAnswer}
-                                onNext={nextQuestion}
-                                showResult={showPracticeResult}
-                                currentStatus={practiceStats[currentQuestionIndex]}
-                                isTimeTrial={isTimeTrial}
-                            />
+                                    <PracticeCard
+                                        question={questions[currentQuestionIndex]}
+                                        index={currentQuestionIndex}
+                                        total={totalQuestions}
+                                        onResult={handleAnswer}
+                                        onNext={nextQuestion}
+                                        showResult={showPracticeResult}
+                                        currentStatus={practiceStats[currentQuestionIndex]}
+                                        isTimeTrial={isTimeTrial}
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -309,6 +361,7 @@ const ExamViewer: React.FC<ExamViewerProps> = ({ paper, onClose, specialization 
 // --- Sub-components ---
 
 const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper }> = ({ questions, paper }) => {
+    const { t } = useLanguage();
     return (
         <div className="h-full overflow-y-auto p-4 md:p-8 custom-scrollbar">
             <div className="max-w-4xl mx-auto space-y-12">
@@ -317,11 +370,11 @@ const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper
                     <div className="flex justify-between items-start mb-2">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                             <BookOpen size={16} className="text-indigo-500" />
-                            Zusammenfassung
+                            {t('summary')}
                         </h3>
                         {paper.solution?.questions?.length !== questions.length && (
                             <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-                                Gefiltert nach Schwerpunkt
+                                {t('filteredBySpecialization')}
                             </span>
                         )}
                     </div>
@@ -338,7 +391,7 @@ const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper
                 </div>
 
                 <div className="text-center pt-8 pb-12 text-gray-400 text-sm">
-                    Ende des Dokuments
+                    {t('endOfDocument')}
                 </div>
             </div>
         </div>
@@ -347,6 +400,7 @@ const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper
 
 const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({ question, index }) => {
     const [showExplanation, setShowExplanation] = React.useState(false);
+    const { t } = useLanguage();
 
     return (
         <div className="pb-10 border-b border-gray-100 break-inside-avoid last:border-0">
@@ -367,7 +421,7 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                     </div>
                     {question.contextScenario && (
                         <div className="mb-3 p-3 bg-blue-50/50 border-l-4 border-blue-400 rounded-r text-sm text-blue-900 italic leading-relaxed">
-                            <span className="font-bold not-italic block mb-1">Situationsbeschreibung:</span>
+                            <span className="font-bold not-italic block mb-1">{t('scenario')}:</span>
                             {question.contextScenario}
                         </div>
                     )}
@@ -382,26 +436,27 @@ const QuestionCard: React.FC<{ question: QuestionAnalysis; index: number }> = ({
                     onClick={() => setShowExplanation(!showExplanation)}
                     className="text-indigo-600 text-sm font-semibold flex items-center gap-2 hover:text-indigo-700 transition-colors mb-4 focus:outline-none"
                 >
-                    {showExplanation ? 'Antwort verbergen' : 'Antwort anzeigen'}
+                    {showExplanation ? t('hideAnswer') : t('showAnswer')}
                     <ChevronLeft size={14} className={`transition-transform ${showExplanation ? '-rotate-90' : 'rotate-180'}`} />
                 </button>
 
                 <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showExplanation ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                    <div className="bg-green-50/50 border border-green-100 rounded-lg p-4 mb-3">
-                        <div className="text-xs font-bold text-green-700 uppercase mb-1 flex items-center gap-1">
-                            <CheckCircle size={12} /> Richtige Antwort
-                        </div>
-                        <div className="text-gray-900 font-medium text-sm">
-                            {question.solution}
-                        </div>
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl mb-6">
+                        <p className="text-sm font-bold text-emerald-800 flex items-center gap-2 mb-1">
+                            <CheckCircle2 size={16} /> {t('correct')}
+                        </p>
+                        <p className="text-sm text-emerald-700 leading-relaxed">{question.solution}</p>
                     </div>
                     <div className="text-sm text-gray-600 pl-2 border-l-2 border-indigo-200">
-                        <div className="mb-2">
-                            <span className="font-semibold text-indigo-900">Erklärung:</span> {question.explanation}
-                        </div>
+                        {question.explanation && (
+                            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">{t('explanation')}</p>
+                                <p className="text-sm text-gray-600 leading-relaxed">{question.explanation}</p>
+                            </div>
+                        )}
                         {question.pointsBreakdown && (
-                            <div className="bg-white/50 p-3 rounded border border-gray-100 text-xs">
-                                <span className="font-bold text-gray-700 block mb-1">Punkteverteilung:</span>
+                            <div className="bg-white/50 p-3 rounded border border-gray-100 text-xs mt-3">
+                                <span className="font-bold text-gray-700 block mb-1">{t('pointsBreakdown')}:</span>
                                 <div className="text-gray-500 whitespace-pre-line">{question.pointsBreakdown}</div>
                             </div>
                         )}
@@ -431,22 +486,22 @@ const PracticeCard: React.FC<{
                 <div className="flex justify-between items-start mb-6">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Frage {index + 1} von {total}</span>
                     <div className="flex items-center gap-3">
-                        {question.points && (
+                        {question?.points && (
                             <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1">
                                 <Trophy size={10} /> {question.points} Pkt
                             </span>
                         )}
-                        <span className="text-xs font-medium text-gray-500">{question.topic}</span>
+                        <span className="text-xs font-medium text-gray-500">{question?.topic}</span>
                     </div>
                 </div>
-                {question.contextScenario && (
+                {question?.contextScenario && (
                     <div className="mb-6 p-4 bg-blue-50/50 border-l-4 border-blue-400 rounded-r text-sm text-blue-900 italic leading-relaxed">
                         <span className="font-bold not-italic block mb-1">Situationsbeschreibung:</span>
                         {question.contextScenario}
                     </div>
                 )}
                 <h3 className="text-xl md:text-2xl font-bold text-gray-900 leading-snug">
-                    {question.questionText}
+                    {question?.questionText}
                 </h3>
             </div>
 

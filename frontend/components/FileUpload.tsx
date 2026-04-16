@@ -3,6 +3,7 @@
 import React, { useCallback, useState } from 'react';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
 import { useToast } from './Toast';
+import { useLanguage } from '../context/LanguageContext';
 
 interface FileUploadProps {
     onFileUpload: (files: File[]) => void;
@@ -10,6 +11,7 @@ interface FileUploadProps {
 
 const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
     const { toast } = useToast();
+    const { t } = useLanguage();
 
     const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -20,13 +22,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
             const pdfFiles = allFiles.filter((f: File) => f.type === 'application/pdf');
             
             if (pdfFiles.length !== allFiles.length) {
-                toast("Einige Dateien wurden ignoriert, da nur PDF-Dateien erlaubt sind.", "error");
+                toast(t('onlyPdfError'), "error");
             }
             
             if (pdfFiles.length > 0) {
                 onFileUpload(pdfFiles);
             } else {
-                toast("Bitte laden Sie mindestens eine PDF-Datei hoch.", "error");
+                toast(t('atLeastOnePdf'), "error");
             }
         }
     }, [onFileUpload, toast]);
@@ -63,8 +65,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
                 <Upload className="w-6 h-6 md:w-8 md:h-8 text-indigo-600" />
             </div>
 
-            <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1">Prüfungsarbeiten importieren</h3>
-            <p className="text-xs md:text-sm text-gray-500 px-4 text-center">PDFs hierher ziehen oder tippen zum Durchsuchen</p>
+            <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-1">{t('importExams')}</h3>
+            <p className="text-xs md:text-sm text-gray-500 px-4 text-center">{t('dragDropHint')}</p>
 
             <div className="mt-3 md:mt-4 flex gap-2">
                 <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-500 flex items-center gap-1">

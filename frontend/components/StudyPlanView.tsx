@@ -3,6 +3,8 @@
 import React from 'react';
 import { StudyPlan } from '../types';
 import { Calendar, Clock, CheckSquare, Target, Download, Sparkles, AlertCircle } from 'lucide-react';
+import SmartLoadingOverlay from './SmartLoadingOverlay';
+import { useLanguage } from '../context/LanguageContext';
 
 interface StudyPlanViewProps {
     plan: StudyPlan | null;
@@ -12,20 +14,34 @@ interface StudyPlanViewProps {
 }
 
 const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, onGenerate, isGenerating }) => {
+    const { t } = useLanguage();
     const handlePrint = () => {
         window.print();
     };
 
+    const planningSteps: any[] = [
+        'stepAnalyzing',
+        'stepGaps',
+        'stepStrategy',
+        'stepIntervals',
+        'stepFinalizing'
+    ];
+
     // EMPTY STATE: No Plan Generated Yet
     if (!plan) {
         return (
-            <div className="h-full flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+            <div className="h-full flex flex-col items-center justify-center p-8 text-center animate-fade-in relative">
+                <SmartLoadingOverlay 
+                    titleKey="generatingPlan" 
+                    steps={planningSteps} 
+                    isProcessing={isGenerating} 
+                />
                 <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
                     <Calendar size={48} className="text-indigo-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">Ihr persönlicher Lernplan</h2>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('personalPlan')}</h2>
                 <p className="text-gray-500 max-w-md mb-8">
-                    ExamPilot kann Ihre gelösten Arbeiten analysieren, um eine maßgeschneiderte 7-Tage-Revisionsstrategie zu erstellen, die sich auf Ihre Schwachstellen konzentriert.
+                    {t('personalPlanSub')}
                 </p>
 
                 {hasSolvedPapers ? (
@@ -37,19 +53,19 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                         {isGenerating ? (
                             <>
                                 <Sparkles size={20} className="animate-spin text-yellow-300" />
-                                Lernplan wird erstellt...
+                                {t('creatingPlan')}
                             </>
                         ) : (
                             <>
                                 <Sparkles size={20} className="text-yellow-300" />
-                                KI-Lernplan erstellen
+                                {t('createAiPlan')}
                             </>
                         )}
                     </button>
                 ) : (
                     <div className="flex items-center gap-2 px-6 py-3 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                         <AlertCircle size={20} />
-                        <span className="font-medium">Laden Sie zuerst Arbeiten hoch und analysieren Sie diese, um einen Plan zu erstellen.</span>
+                        <span className="font-medium">{t('uploadFirstError')}</span>
                     </div>
                 )}
             </div>
@@ -63,7 +79,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
             <button
                 onClick={handlePrint}
                 className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 transition-colors z-10 no-print hover:bg-gray-50 rounded-md"
-                title="Als PDF exportieren"
+                title={t('exportPdf')}
             >
                 <Download size={20} />
             </button>
@@ -85,7 +101,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                             
                             <div className="flex flex-col md:flex-row md:items-start gap-4 mb-4">
                                 <div className="flex-shrink-0 w-12 pt-1">
-                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Tag</div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">{t('dayLabel')}</div>
                                     <div className="text-2xl font-black text-gray-900 text-center">{day.day}</div>
                                 </div>
 
@@ -94,8 +110,8 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                                         {day.focus}
                                     </h3>
                                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                                        <span className="flex items-center gap-1"><Clock size={12} /> {day.durationMinutes} Min.</span>
-                                        <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(day.date).toLocaleDateString('de-DE')}</span>
+                                        <span className="flex items-center gap-1"><Clock size={12} /> {day.durationMinutes} {t('min')}.</span>
+                                        <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(day.date).toLocaleDateString(t('language') === 'en' ? 'en-US' : 'de-DE')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -116,7 +132,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plan, hasSolvedPapers, on
                             onClick={onGenerate}
                             className="text-sm text-gray-400 hover:text-indigo-600 underline transition-colors no-print"
                         >
-                            Plan aus neuesten Arbeiten neu erstellen
+                            {t('recreatePlan')}
                         </button>
                     </div>
                 </div>

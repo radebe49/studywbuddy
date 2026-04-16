@@ -6,6 +6,8 @@ import { Specialization } from '../types';
 import { BookOpen, Sparkles, ChevronRight, ChevronDown, FileText, AlertCircle, Loader2, ArrowLeft, Bookmark, Zap, CheckCircle2, GraduationCap, Briefcase, Trophy, BrainCircuit, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToast } from './Toast';
+import SmartLoadingOverlay from './SmartLoadingOverlay';
+import { useLanguage } from '../context/LanguageContext';
 
 // Helper to categorize a topic/subject into the IHK taxonomy
 const categorizeSubject = (subject: string): { area: 'BQ' | 'HQ' | 'Sonstige'; handlungsbereich?: string } => {
@@ -71,6 +73,7 @@ interface StudyGuidesProps {
 
 const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
     const { toast } = useToast();
+    const { t } = useLanguage();
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [topics, setTopics] = useState<string[]>([]);
     const [guides, setGuides] = useState<Partial<StudyGuide>[]>([]);
@@ -210,7 +213,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                 </div>
                 <button
                     onClick={(e) => guide.id && handleDeleteGuide(guide.id, e)}
-                    className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-20 hover:opacity-100"
                     title="Löschen"
                 >
                     <Trash2 size={16} />
@@ -231,7 +234,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                     onClick={() => setView('list')}
                     className="flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-6 transition-colors"
                 >
-                    <ArrowLeft size={18} /> Zurück zu Leitfäden
+                    <ArrowLeft size={18} /> {t('backToGuides')}
                 </button>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -241,7 +244,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                 ? 'bg-blue-500/30 text-blue-100'
                                 : 'bg-amber-500/30 text-amber-100'
                                 }`}>
-                                {guideCategory.area === 'BQ' ? 'Basisqualifikation' : 'Handlungsspezifisch'}
+                                {guideCategory.area === 'BQ' ? t('basisQualifikation') : t('handlungsspezifisch')}
                             </span>
                             {guideCategory.handlungsbereich && (
                                 <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/20">
@@ -258,7 +261,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <FileText className="text-indigo-600" />
-                                Überblick
+                                {t('summary')}
                             </h2>
                             <div className="prose prose-indigo max-w-none text-gray-600 bg-white p-6 rounded-xl border border-gray-100">
                                 <ReactMarkdown>{selectedGuide.summary_markdown}</ReactMarkdown>
@@ -269,7 +272,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <Zap className="text-amber-500" />
-                                Wichtige Konzepte
+                                {t('keyConcepts')}
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {selectedGuide.key_concepts.map((concept, i) => (
@@ -288,7 +291,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                             <section>
                                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <span className="font-serif italic text-2xl text-indigo-600">f(x)</span>
-                                    Formeln & Regeln (Formelsammlung)
+                                    {t('formulasRegeln')}
                                 </h2>
                                 <div className="grid gap-4">
                                     {selectedGuide.formulas.map((f, i) => (
@@ -314,7 +317,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                 </div>
                                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                                     <Trophy className="text-amber-400" />
-                                    IHK Punkte-Strategie
+                                    {t('ihkPointsStrategy')}
                                 </h2>
                                 <div className="prose prose-invert max-w-none text-indigo-100 text-sm leading-relaxed">
                                     <ReactMarkdown>{selectedGuide.point_strategy}</ReactMarkdown>
@@ -327,7 +330,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                             <section>
                                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <BrainCircuit className="text-purple-500" />
-                                    Beispielaufgaben
+                                    {t('exampleTasks')}
                                 </h2>
                                 <div className="space-y-4">
                                     {selectedGuide.example_questions.map((ex, i) => (
@@ -337,7 +340,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                                 <p className="text-gray-700">{ex.problem}</p>
                                             </div>
                                             <div className="p-5">
-                                                <div className="text-xs font-bold text-green-700 uppercase mb-2">Musterlösung</div>
+                                                <div className="text-xs font-bold text-green-700 uppercase mb-2">{t('modelSolution')}</div>
                                                 <div className="prose prose-sm max-w-none text-gray-600">
                                                     <ReactMarkdown>{ex.solution}</ReactMarkdown>
                                                 </div>
@@ -353,12 +356,25 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
         );
     }
 
+    const guideSteps: any[] = [
+        'stepQuestions',
+        'stepConcepts',
+        'stepSolutions',
+        'stepTips',
+        'stepFormatting'
+    ];
+
     return (
-        <div className="h-full overflow-y-auto custom-scrollbar p-6 pb-20 animate-fade-in">
+        <div className="h-full overflow-y-auto custom-scrollbar p-6 pb-20 animate-fade-in relative">
+            <SmartLoadingOverlay 
+                titleKey="generatingGuide" 
+                steps={guideSteps} 
+                isProcessing={!!generatingTopic} 
+            />
             <div className="mb-8 flex justify-between items-end">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Lernleitfäden</h1>
-                    <p className="text-gray-500 mt-2">KI-generierte Spickzettel und Zusammenfassungen nach IHK-Struktur.</p>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{t('studyGuidesTitle')}</h1>
+                    <p className="text-gray-500 mt-2">{t('studyGuidesSub')}</p>
                 </div>
                 {specialization !== 'None' && (
                     <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-xs font-medium text-indigo-700">
@@ -373,7 +389,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                 <div className="mb-10 space-y-6">
                     <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                         <Bookmark size={18} className="text-indigo-600" />
-                        Ihre Bibliothek
+                        {t('yourLibrary')}
                     </h2>
 
                     {/* BQ Section */}
@@ -501,7 +517,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
             <div>
                 <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Sparkles size={18} className="text-amber-500" />
-                    Neuen Leitfaden erstellen
+                    {t('createNewGuid')}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {topics.filter(t => {
@@ -528,11 +544,11 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                                 {generatingTopic === topic ? (
                                     <>
                                         <Loader2 size={14} className="animate-spin" />
-                                        Erstellen...
+                                        {t('generating')}
                                     </>
                                 ) : (
                                     <>
-                                        Erstellen <ChevronRight size={14} />
+                                        {t('create')} <ChevronRight size={14} />
                                     </>
                                 )}
                             </button>
@@ -540,7 +556,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                     ))}
                     {topics.length === 0 && (
                         <div className="col-span-full p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
-                            Noch keine Themen gefunden. Laden Sie Prüfungsarbeiten hoch und analysieren Sie diese, um Themen zu erkennen.
+                            {t('noTopicsFound')}
                         </div>
                     )}
                 </div>

@@ -4,7 +4,7 @@ import { ExamPaper, ExamSolution, StudyPlan } from '../types';
 
 import { supabase } from './supabase';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 const api = axios.create({
     baseURL: API_URL,
@@ -194,6 +194,7 @@ export const chatFachgespraech = async (messages: ChatMessage[], topic?: string)
 
 export interface UserSettings {
     specialization: string | null;
+    language?: string | null;
 }
 
 export const getSettings = async (): Promise<UserSettings> => {
@@ -201,7 +202,10 @@ export const getSettings = async (): Promise<UserSettings> => {
     return res.data;
 };
 
-export const updateSettings = async (specialization: string): Promise<UserSettings> => {
-    const res = await api.post('/settings', { specialization });
+export const updateSettings = async (specialization?: string, language?: string): Promise<UserSettings> => {
+    const data: any = {};
+    if (specialization) data.specialization = specialization;
+    if (language) data.language = language;
+    const res = await api.post('/settings', data);
     return res.data;
 };

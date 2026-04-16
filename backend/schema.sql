@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS questions (
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) DEFAULT auth.uid(),
     specialization TEXT,
+    language TEXT DEFAULT 'de',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

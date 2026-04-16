@@ -6,7 +6,10 @@
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(python3 -m py_compile main.py)"
+      "Bash(python3 -m py_compile main.py)",
+      "Bash(curl -sS -X POST https://routellm.abacus.ai/v1/chat/completions -H 'Authorization: Bearer s2_d6113724db6a465a9e328b3f563eaf18' -H 'Content-Type: application/json' -d '{\"model\":\"__TRACKED_VAR__\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}' -w 'HTTP=%{http_code}\\\\n' -o /tmp/m.txt)",
+      "Read(//tmp/**)",
+      "Bash(curl -sS -X OPTIONS \"http://localhost:8000/exams/test-id\" -H \"Origin: http://localhost:3000\" -H \"Access-Control-Request-Method: DELETE\" -H \"Access-Control-Request-Headers: authorization\" -w \"\\\\nHTTP=%{http_code}\\\\n\" -o /tmp/d.txt -D -)"
     ]
   }
 }
