@@ -261,7 +261,7 @@ const StudyGuides: React.FC<StudyGuidesProps> = ({ specialization }) => {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <FileText className="text-indigo-600" />
-                                {t('summary')}
+                                {t('guideOverview')}
                             </h2>
                             <div className="prose prose-indigo max-w-none text-gray-600 bg-white p-6 rounded-xl border border-gray-100">
                                 <ReactMarkdown>{selectedGuide.summary_markdown}</ReactMarkdown>

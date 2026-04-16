@@ -370,7 +370,7 @@ const ReviewModeView: React.FC<{ questions: QuestionAnalysis[], paper: ExamPaper
                     <div className="flex justify-between items-start mb-2">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                             <BookOpen size={16} className="text-indigo-500" />
-                            {t('summary')}
+                            {t('examSummary')}
                         </h3>
                         {paper.solution?.questions?.length !== questions.length && (
                             <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">

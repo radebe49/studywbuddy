@@ -92,7 +92,7 @@ export const translations = {
         abort: 'Abbrechen',
         finish: 'Beenden',
         submit: 'Abgeben',
-        summary: 'Zusammenfassung',
+        examSummary: 'Zusammenfassung',
         filteredBySpecialization: 'Gefiltert nach Schwerpunkt',
         endOfDocument: 'Ende des Dokuments',
         scenario: 'Situationsbeschreibung',
@@ -101,10 +101,9 @@ export const translations = {
         pointsBreakdown: 'Punkteverteilung',
 
         // Study Guides
-        studyGuidesTitle: 'Lernleitfäden',
         studyGuidesSub: 'KI-generierte Spickzettel und Zusammenfassungen nach IHK-Struktur.',
         backToGuides: 'Zurück zu Leitfäden',
-        summary: 'Überblick',
+        guideOverview: 'Überblick',
         keyConcepts: 'Wichtige Konzepte',
         formulasRegeln: 'Formeln & Regeln (Formelsammlung)',
         ihkPointsStrategy: 'IHK Punkte-Strategie',
@@ -143,19 +142,11 @@ export const translations = {
         ait: 'Automatisierungs- und Informationstechnik',
 
         // Status
-        processing: 'Verarbeitung...',
         failed: 'Fehler',
         ready: 'Bereit',
 
         // Smart Loading
-        processingAI: 'KI-Verarbeitung läuft...',
-        generatingPlan: 'Lernplan wird erstellt',
         generatingGuide: 'Leitfaden wird generiert',
-        stepAnalyzing: 'Analysiere Prüfungsverläufe...',
-        stepGaps: 'Identifiziere Wissenslücken...',
-        stepStrategy: 'Strukturiere Revisionsstrategie...',
-        stepIntervals: 'Optimiere Lernintervalle...',
-        stepFinalizing: 'Finalisiere Ergebnisse...',
         stepQuestions: 'Sammle relevante Prüfungsfragen...',
         stepConcepts: 'Extrahiere Schlüsselkonzepte...',
         stepSolutions: 'Formuliere Musterlösungen...',
@@ -252,7 +243,7 @@ export const translations = {
         abort: 'Abort',
         finish: 'Finish',
         submit: 'Submit',
-        summary: 'Summary',
+        examSummary: 'Summary',
         filteredBySpecialization: 'Filtered by Specialization',
         endOfDocument: 'End of Document',
         scenario: 'Scenario Description',
@@ -261,10 +252,9 @@ export const translations = {
         pointsBreakdown: 'Points Breakdown',
 
         // Study Guides
-        studyGuidesTitle: 'Study Guides',
         studyGuidesSub: 'AI-generated cheat sheets and summaries according to IHK structure.',
         backToGuides: 'Back to Guides',
-        summary: 'Overview',
+        guideOverview: 'Overview',
         keyConcepts: 'Key Concepts',
         formulasRegeln: 'Formulas & Rules',
         ihkPointsStrategy: 'IHK Point Strategy',
@@ -300,7 +290,19 @@ export const translations = {
         bq: 'Basisqualifikationen (BQ)',
         hq: 'Handlungsspezifische Qualifikationen (HQ)',
         ibt: 'Infrastruktursysteme und Betriebstechnik',
-        ait: 'Automatisierungs- und Informationstechnik'
+        ait: 'Automatisierungs- und Informationstechnik',
+
+        // Status
+        failed: 'Failed',
+        ready: 'Ready',
+
+        // Smart Loading
+        generatingGuide: 'Generating Guide',
+        stepQuestions: 'Collecting relevant exam questions...',
+        stepConcepts: 'Extracting key concepts...',
+        stepSolutions: 'Formulating model solutions...',
+        stepTips: 'Creating mnemonics & tips...',
+        stepFormatting: 'Formatting guide...'
     }
 };
 
